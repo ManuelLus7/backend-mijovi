@@ -5,12 +5,13 @@ import * as MediaLibrary from 'expo-media-library';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../colors';
 
-const API_URL = 'https://backend-mijovi-production.up.railway.app';
+const API_URL = 'https://backend-mijovi-production.up.railway.app'; // O tu IP local si testeas localmente
 
 export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Previas');
   const [loading, setLoading] = useState(false);
   const cameraRef = useRef<any>(null);
 
@@ -39,14 +40,14 @@ export default function CameraScreen() {
     if (!mediaPermission?.granted) {
       const permissionResponse = await requestMediaPermission();
       if (!permissionResponse.granted) {
-        return Alert.alert("Permiso Denegado", "Necesitamos acceso para guardar fotos en tu dispositivo.");
+        return Alert.alert("Permiso Denegado", "Necesitamos permiso para guardar fotos en tu galería.");
       }
     }
     try {
       await MediaLibrary.saveToLibraryAsync(photoUri);
       Alert.alert("¡Guardada! 📸", "La foto se guardó en la galería de tu celular.");
     } catch (error) {
-      Alert.alert("Aviso", "Procesada. En Expo Go el acceso a la galería puede estar limitado por Android. Para la versión final instalable se genera una Development Build.");
+      Alert.alert("Aviso", "No se pudo guardar automáticamente en el dispositivo.");
     }
   };
 
@@ -59,14 +60,15 @@ export default function CameraScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           usuario_nombre: 'Corredor Mijovi',
-          imagen_url: photoUri
+          imagen_url: photoUri,
+          categoria: categoriaSeleccionada
         })
       });
       if (res.ok) {
-        Alert.alert("¡Éxito!", "Tu foto fue publicada en el Muro Comunitario.");
+        Alert.alert("¡Éxito! 🚀", `Tu foto fue publicada en la categoría [${categoriaSeleccionada}].`);
         setPhotoUri(null);
       } else {
-        Alert.alert("Error", "No se pudo publicar la foto.");
+        Alert.alert("Error", "No se pudo publicar la foto en el servidor.");
       }
     } catch (e) {
       Alert.alert("Error", "Error de conexión con el servidor.");
@@ -79,10 +81,8 @@ export default function CameraScreen() {
     <View style={styles.container}>
       {!photoUri ? (
         <View style={StyleSheet.absoluteFillObject}>
-          {/* Vista de Cámara independiente (Sin elementos hijos adentro) */}
           <CameraView style={StyleSheet.absoluteFillObject} ref={cameraRef} />
 
-          {/* Superposición del Marco Oficial con posicionamiento absoluto */}
           <View style={styles.frameContainer} pointerEvents="none">
             <View style={styles.frameHeader}>
               <Text style={styles.frameTitle}>MARATÓN MIJOVI 2027</Text>
@@ -92,7 +92,6 @@ export default function CameraScreen() {
             </View>
           </View>
 
-          {/* Botón Disparador */}
           <View style={styles.actionContainer}>
             <TouchableOpacity style={styles.captureBtn} onPress={takePicture}>
               <View style={styles.innerCaptureBtn} />
@@ -103,10 +102,24 @@ export default function CameraScreen() {
         <View style={styles.previewContainer}>
           <Image source={{ uri: photoUri }} style={styles.previewImage} />
           
+          {/* Selector de Categoría antes de Compartir */}
+          <Text style={styles.labelCat}>Clasifica tu foto para el Muro:</Text>
+          <View style={styles.rowCats}>
+            {['Previas', 'Carrera', 'Medallas'].map((cat) => (
+              <TouchableOpacity 
+                key={cat} 
+                style={[styles.chipCat, categoriaSeleccionada === cat && styles.chipCatActive]} 
+                onPress={() => setCategoriaSeleccionada(cat)}
+              >
+                <Text style={[styles.chipCatText, categoriaSeleccionada === cat && styles.chipCatTextActive]}>{cat}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           <View style={styles.previewActions}>
             <TouchableOpacity style={styles.btnActionSecondary} onPress={guardarEnGaleria}>
               <Ionicons name="download-outline" size={18} color={Colors.white} />
-              <Text style={styles.btnActionText}> Guardar Galería</Text>
+              <Text style={styles.btnActionText}> Guardar</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.btnActionPrimary} onPress={publicarEnMuro} disabled={loading}>
@@ -115,7 +128,7 @@ export default function CameraScreen() {
               ) : (
                 <>
                   <Ionicons name="share-social" size={18} color={Colors.white} />
-                  <Text style={styles.btnActionText}> Compartir Muro</Text>
+                  <Text style={styles.btnActionText}> Publicar</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -145,11 +158,17 @@ const styles = StyleSheet.create({
   captureBtn: { width: 70, height: 70, borderRadius: 35, borderWidth: 4, borderColor: Colors.white, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)' },
   innerCaptureBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: Colors.primary },
   previewContainer: { flex: 1, backgroundColor: Colors.black, justifyContent: 'center', alignItems: 'center', padding: 15 },
-  previewImage: { width: '100%', height: '68%', borderRadius: 12 },
-  previewActions: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 15 },
+  previewImage: { width: '100%', height: '55%', borderRadius: 12, marginBottom: 10 },
+  labelCat: { color: Colors.white, fontSize: 12, fontWeight: 'bold', marginBottom: 6, alignSelf: 'flex-start' },
+  rowCats: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 15 },
+  chipCat: { flex: 1, padding: 8, borderWidth: 1, borderColor: '#555', borderRadius: 6, alignItems: 'center', marginHorizontal: 3, backgroundColor: '#222' },
+  chipCatActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  chipCatText: { color: Colors.white, fontSize: 11, fontWeight: 'bold' },
+  chipCatTextActive: { color: Colors.white },
+  previewActions: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 10 },
   btnActionPrimary: { flex: 1, backgroundColor: Colors.primary, padding: 12, borderRadius: 8, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginLeft: 5 },
   btnActionSecondary: { flex: 1, backgroundColor: '#333', padding: 12, borderRadius: 8, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginRight: 5 },
   btnActionText: { color: Colors.white, fontWeight: 'bold', fontSize: 12 },
-  btnRetake: { marginTop: 15 },
+  btnRetake: { marginTop: 5 },
   btnRetakeText: { color: Colors.gray, fontSize: 13, textDecorationLine: 'underline' }
 });

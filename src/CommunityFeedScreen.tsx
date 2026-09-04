@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { 
   StyleSheet, Text, View, FlatList, Image, RefreshControl, 
-  TouchableOpacity, Modal, ActivityIndicator, Linking 
+  TouchableOpacity, Modal, ActivityIndicator, Linking, Alert 
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../colors';
 
-const API_URL = 'https://backend-mijovi-production.up.railway.app'; // Ajustar según IP/Dominio
+const API_URL = 'https://backend-mijovi-production.up.railway.app';
 
-export default function CommunityFeedScreen() {
+export default function CommunityFeedScreen({ isAdminMode }: { isAdminMode: boolean }) {
   const [tabActiva, setTabActiva] = useState<'oficiales' | 'participantes'>('oficiales');
   
   // Muro Comunitario
@@ -60,6 +60,33 @@ export default function CommunityFeedScreen() {
       await fetchAlbumesOficiales();
     }
     setRefreshing(false);
+  };
+
+  const eliminarFoto = async (id: number) => {
+    Alert.alert(
+      "Eliminar Publicación",
+      "¿Estás seguro de que deseas eliminar esta foto del muro?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        { 
+          text: "Eliminar", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const res = await fetch(`${API_URL}/api/fotos/${id}`, { method: 'DELETE' });
+              if (res.ok) {
+                Alert.alert("Éxito", "Foto eliminada correctamente");
+                fetchFotos();
+              } else {
+                Alert.alert("Error", "No se pudo eliminar la foto");
+              }
+            } catch (e) {
+              Alert.alert("Error", "Error de conexión con el servidor");
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -158,16 +185,24 @@ export default function CommunityFeedScreen() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
             renderItem={({ item }) => (
               <View style={styles.card}>
+                <View style={styles.postHeader}>
+                  <Text style={styles.user}>{item.usuario_nombre}</Text>
+                  {isAdminMode && (
+                    <TouchableOpacity onPress={() => eliminarFoto(item.id)}>
+                      <Ionicons name="trash-outline" size={18} color="#FF3B30" />
+                    </TouchableOpacity>
+                  )}
+                </View>
                 <Image source={{ uri: item.imagen_url }} style={styles.image} />
                 <View style={styles.footer}>
-                  <Text style={styles.user}>{item.usuario_nombre}</Text>
-                  <Text style={styles.date}>Maratón Mijovi</Text>
+                  <Text style={styles.date}>{item.categoria || 'General'}</Text>
+                  <Text style={styles.maratonText}>Maratón Mijovi</Text>
                 </View>
               </View>
             )}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>Sé el primero en subir tu foto en {categoriaActiva}</Text>
+                <Text style={styles.emptyText}>Sé el primero en subir tu foto en {categoriaActiva} 📸</Text>
               </View>
             }
           />
@@ -221,10 +256,12 @@ const styles = StyleSheet.create({
   albumChipText: { color: Colors.gray, fontSize: 12, fontWeight: 'bold' },
   albumChipTextActive: { color: Colors.white },
   card: { backgroundColor: Colors.white, marginHorizontal: 10, marginVertical: 8, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#EEE' },
+  postHeader: { padding: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
   image: { width: '100%', height: 280, resizeMode: 'cover' },
   footer: { padding: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   user: { fontWeight: 'bold', fontSize: 13, color: Colors.black },
   date: { color: Colors.primary, fontSize: 11, fontWeight: 'bold' },
+  maratonText: { color: Colors.gray, fontSize: 11 },
   emptyContainer: { padding: 40, alignItems: 'center', justifyContent: 'center' },
   emptyText: { color: Colors.gray, textAlign: 'center', fontSize: 13, marginTop: 10 },
   modalHeader: { height: 50, backgroundColor: Colors.black, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 15 },
