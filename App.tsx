@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, 
-  Alert, StatusBar, RefreshControl, Modal, Linking, Platform 
+  Alert, StatusBar, RefreshControl, Modal, Linking, Image 
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
 import CameraScreen from './src/CameraScreen';
 import AdminScannerScreen from './src/AdminScannerScreen';
 import CommunityFeedScreen from './src/CommunityFeedScreen';
@@ -15,51 +13,7 @@ import { Colors } from './colors';
 
 const API_URL = 'https://backend-mijovi-production.up.railway.app';
 const INSTAGRAM_PROFILE_URL = 'https://www.instagram.com/maratonmijovi/?hl=es';
-
-// Handler global de notificaciones configurado al nivel superior (top-level)
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
-
-// Función de registro exportada correctamente al nivel superior
-export async function registerForPushNotificationsAsync() {
-  let token;
-
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#F15A24',
-    });
-  }
-
-  if (Device.isDevice) {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    
-    if (finalStatus !== 'granted') {
-      return;
-    }
-    
-    try {
-      token = (await Notifications.getExpoPushTokenAsync()).data;
-    } catch (e) {
-      console.log("Error al obtener push token:", e);
-    }
-  }
-
-  return token;
-}
+const INSTAGRAM_HIGHLIGHTS_URL = 'https://www.instagram.com/stories/highlights/17941850090997104/?hl=es';
 
 export default function App() {
   const [isAdminMode, setIsAdminMode] = useState(false);
@@ -71,6 +25,7 @@ export default function App() {
   const [eventoSection, setEventoSection] = useState<'inicio' | 'registro' | 'info'>('inicio');
   const [adminTab, setAdminTab] = useState<'kpis' | 'escaner' | 'listado'>('kpis');
 
+  const [faqOpen, setFaqOpen] = useState<number | null>(null);
   const [busqueda, setBusqueda] = useState('');
 
   // Formulario Registro Corredor
@@ -190,56 +145,6 @@ export default function App() {
     c.dni.includes(busqueda)
   );
 
-  // Configurar cómo se comportan las notificaciones al recibirse con la app abierta
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
-
-// Función para registrar y obtener el token de notificaciones push
-export async function registerForPushNotificationsAsync() {
-  let token;
-
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#F15A24',
-    });
-  }
-
-  if (Device.isDevice) {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    
-    if (finalStatus !== 'granted') {
-      alert('¡Permiso de notificaciones denegado para alertas de la maratón!');
-      return;
-    }
-    
-    // Obtener el token de Expo para este dispositivo
-    try {
-      token = (await Notifications.getExpoPushTokenAsync()).data;
-      console.log("Expo Push Token:", token);
-    } catch (e) {
-      console.log("Error al obtener push token:", e);
-    }
-  } else {
-    alert('Las notificaciones push requieren un dispositivo físico (no funcionan en emulador por defecto)');
-  }
-
-  return token;
-}
-
   return (
     <SafeAreaProvider>
       <StatusBar barStyle="light-content" backgroundColor={Colors.black} />
@@ -248,11 +153,7 @@ export async function registerForPushNotificationsAsync() {
         {/* Header Superior con Logo Oficial */}
         <View style={styles.header}>
           <View style={styles.headerBrand}>
-            <Image 
-              source={require('./assets/icon.png')} 
-              style={styles.logoHeaderImage} 
-              resizeMode="contain"
-            />
+            <View style={styles.logoBadge}><Text style={styles.logoBadgeText}>M</Text></View>
             <Text style={styles.headerTitle}>{isAdminMode ? 'STAFF / ADMIN' : 'MARATÓN MIJOVI'}</Text>
           </View>
 
@@ -392,10 +293,10 @@ export async function registerForPushNotificationsAsync() {
                           <Text style={styles.featureDesc}>Reconocimiento al cruzar la meta.</Text>
                         </View>
                         <View style={styles.featureBox}>
-  <Ionicons name="card" size={26} color={Colors.primary} />
-  <Text style={styles.featureTitle}>Dorsal Oficial</Text>
-  <Text style={styles.featureDesc}>Número de identificación para el corredor.</Text>
-</View>
+                          <Ionicons name="card" size={26} color={Colors.primary} />
+                          <Text style={styles.featureTitle}>Dorsal Oficial</Text>
+                          <Text style={styles.featureDesc}>Número de identificación para el corredor.</Text>
+                        </View>
                         <View style={styles.featureBox}>
                           <Ionicons name="water" size={26} color={Colors.primary} />
                           <Text style={styles.featureTitle}>Hidratación</Text>
@@ -465,7 +366,7 @@ export async function registerForPushNotificationsAsync() {
                     </View>
                   )}
 
-                  {/* SECCIÓN REGISTRO (CON INPUTS CORREGIDOS) */}
+                  {/* SECCIÓN REGISTRO */}
                   {eventoSection === 'registro' && (
                     <View>
                       <Text style={styles.sectionHeader}>Inscripción - Abril 2027</Text>
@@ -517,96 +418,81 @@ export async function registerForPushNotificationsAsync() {
                     </View>
                   )}
 
-                  {/* SECCIÓN CIRCUITOS Y RECORRIDOS (FOTOS ATLETISMO) */}
+                  {/* SECCIÓN CIRCUITOS */}
                   {eventoSection === 'info' && (
                     <View>
                       <Text style={styles.sectionHeader}>Circuitos Oficiales - Abril 2027</Text>
 
                       {/* Tarjeta 5K */}
-<TouchableOpacity style={styles.circuitCard} onPress={() => openInstagram(INSTAGRAM_HIGHLIGHTS_URL)}>
-  <Image 
-    source={require('./assets/circuitos/5k.jpg')} 
-    style={styles.circuitImage} 
-  />
-  <View style={styles.circuitBody}>
-    <View style={styles.rowBetween}>
-      <Text style={styles.circuitTitle}>Circuito 5K Participativo</Text>
-      <Text style={styles.circuitBadge}>Largada 08:30 HS</Text>
-    </View>
-    <Text style={styles.circuitDesc}>Trazado recreativo, totalmente plano y seguro sobre la avenida principal. Ideal para familias, principiantes o caminantes.</Text>
+                      <TouchableOpacity style={styles.circuitCard} onPress={() => openInstagram(INSTAGRAM_HIGHLIGHTS_URL)}>
+                        <View style={styles.circuitBody}>
+                          <View style={styles.rowBetween}>
+                            <Text style={styles.circuitTitle}>Circuito 5K Participativo</Text>
+                            <Text style={styles.circuitBadge}>Largada 08:30 HS</Text>
+                          </View>
+                          <Text style={styles.circuitDesc}>Trazado recreativo, totalmente plano y seguro sobre la avenida principal. Ideal para familias, principiantes o caminantes.</Text>
+                          <View style={styles.techDataGrid}>
+                            <View style={styles.techDataItem}>
+                              <Ionicons name="trending-up" size={14} color={Colors.primary} />
+                              <Text style={styles.techDataText}> Altimetría: +15m (Plano)</Text>
+                            </View>
+                            <View style={styles.techDataItem}>
+                              <Ionicons name="water" size={14} color={Colors.primary} />
+                              <Text style={styles.techDataText}> Hidratación: KM 2.5 y Meta</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.instaLinkCircuitText}>Ver fotos del recorrido en Instagram →</Text>
+                        </View>
+                      </TouchableOpacity>
 
-    <View style={styles.techDataGrid}>
-      <View style={styles.techDataItem}>
-        <Ionicons name="trending-up" size={14} color={Colors.primary} />
-        <Text style={styles.techDataText}>Altimetría: +15m (Plano)</Text>
-      </View>
-      <View style={styles.techDataItem}>
-        <Ionicons name="water" size={14} color={Colors.primary} />
-        <Text style={styles.techDataText}>Hidratación: KM 2.5 y Meta</Text>
-      </View>
-    </View>
-    <Text style={styles.instaLinkCircuitText}>Ver fotos del recorrido en Instagram →</Text>
-  </View>
-</TouchableOpacity>
+                      {/* Tarjeta 10K */}
+                      <TouchableOpacity style={styles.circuitCard} onPress={() => openInstagram(INSTAGRAM_HIGHLIGHTS_URL)}>
+                        <View style={styles.circuitBody}>
+                          <View style={styles.rowBetween}>
+                            <Text style={styles.circuitTitle}>Circuito 10K Competitivo</Text>
+                            <Text style={styles.circuitBadge}>Largada 08:00 HS</Text>
+                          </View>
+                          <Text style={styles.circuitDesc}>Recorrido homologado con retornos señalizados y medición por chip. Asfalto rápido para mejorar marca personal.</Text>
+                          <View style={styles.techDataGrid}>
+                            <View style={styles.techDataItem}>
+                              <Ionicons name="trending-up" size={14} color={Colors.primary} />
+                              <Text style={styles.techDataText}> Altimetría: +45m</Text>
+                            </View>
+                            <View style={styles.techDataItem}>
+                              <Ionicons name="water" size={14} color={Colors.primary} />
+                              <Text style={styles.techDataText}> Hidratación: KM 2.5, 5, 7.5 y Meta</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.instaLinkCircuitText}>Ver fotos del recorrido en Instagram →</Text>
+                        </View>
+                      </TouchableOpacity>
 
-{/* Tarjeta 10K */}
-<TouchableOpacity style={styles.circuitCard} onPress={() => openInstagram(INSTAGRAM_HIGHLIGHTS_URL)}>
-  <Image 
-    source={require('./assets/circuitos/10k.jpg')} 
-    style={styles.circuitImage} 
-  />
-  <View style={styles.circuitBody}>
-    <View style={styles.rowBetween}>
-      <Text style={styles.circuitTitle}>Circuito 10K Competitivo</Text>
-      <Text style={styles.circuitBadge}>Largada 08:00 HS</Text>
-    </View>
-    <Text style={styles.circuitDesc}>Recorrido homologado con retornos señalizados y medición por chip. Asfalto rápido para mejorar marca personal.</Text>
+                      {/* Tarjeta 21K */}
+                      <TouchableOpacity style={styles.circuitCard} onPress={() => openInstagram(INSTAGRAM_HIGHLIGHTS_URL)}>
+                        <View style={styles.circuitBody}>
+                          <View style={styles.rowBetween}>
+                            <Text style={styles.circuitTitle}>Circuito 21K Media Maratón</Text>
+                            <Text style={styles.circuitBadge}>Largada 07:30 HS</Text>
+                          </View>
+                          <Text style={styles.circuitDesc}>Desafío principal del evento. Recorrido panorámico con paso por el centro histórico, parque central y zonas de animación.</Text>
+                          <View style={styles.techDataGrid}>
+                            <View style={styles.techDataItem}>
+                              <Ionicons name="trending-up" size={14} color={Colors.primary} />
+                              <Text style={styles.techDataText}> Altimetría: +110m (Moderado)</Text>
+                            </View>
+                            <View style={styles.techDataItem}>
+                              <Ionicons name="water" size={14} color={Colors.primary} />
+                              <Text style={styles.techDataText}> Puestos cada 2.5 KM + Isotónicas</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.instaLinkCircuitText}>Ver fotos del recorrido en Instagram →</Text>
+                        </View>
+                      </TouchableOpacity>
 
-    <View style={styles.techDataGrid}>
-      <View style={styles.techDataItem}>
-        <Ionicons name="trending-up" size={14} color={Colors.primary} />
-        <Text style={styles.techDataText}>Altimetría: +45m</Text>
-      </View>
-      <View style={styles.techDataItem}>
-        <Ionicons name="water" size={14} color={Colors.primary} />
-        <Text style={styles.techDataText}>Hidratación: KM 2.5, 5, 7.5 y Meta</Text>
-      </View>
-    </View>
-    <Text style={styles.instaLinkCircuitText}>Ver fotos del recorrido en Instagram →</Text>
-  </View>
-</TouchableOpacity>
-
-{/* Tarjeta 21K */}
-<TouchableOpacity style={styles.circuitCard} onPress={() => openInstagram(INSTAGRAM_HIGHLIGHTS_URL)}>
-  <Image 
-    source={require('./assets/circuitos/21k.jpg')} 
-    style={styles.circuitImage} 
-  />
-  <View style={styles.circuitBody}>
-    <View style={styles.rowBetween}>
-      <Text style={styles.circuitTitle}>Circuito 21K Media Maratón</Text>
-      <Text style={styles.circuitBadge}>Largada 07:30 HS</Text>
-    </View>
-    <Text style={styles.circuitDesc}>Desafío principal del evento. Recorrido panorámico con paso por el centro histórico, parque central y zonas de animación.</Text>
-
-    <View style={styles.techDataGrid}>
-      <View style={styles.techDataItem}>
-        <Ionicons name="trending-up" size={14} color={Colors.primary} />
-        <Text style={styles.techDataText}>Altimetría: +110m (Moderado)</Text>
-      </View>
-      <View style={styles.techDataItem}>
-        <Ionicons name="water" size={14} color={Colors.primary} />
-        <Text style={styles.techDataText}>Puestos cada 2.5 KM + Isotónicas</Text>
-      </View>
-    </View>
-    <Text style={styles.instaLinkCircuitText}>Ver fotos del recorrido en Instagram →</Text>
-  </View>
-</TouchableOpacity>
-
-<TouchableOpacity style={styles.btnInstaStoryLink} onPress={() => openInstagram(INSTAGRAM_HIGHLIGHTS_URL)}>
-  <Ionicons name="logo-instagram" size={20} color={Colors.white} style={{ marginRight: 8 }} />
-  <Text style={styles.actionBtnText}>Ver Historias Destacadas del Circuito 🌟</Text>
-</TouchableOpacity>
+                      <TouchableOpacity style={styles.btnInstaStoryLink} onPress={() => openInstagram(INSTAGRAM_HIGHLIGHTS_URL)}>
+                        <Ionicons name="logo-instagram" size={20} color={Colors.white} style={{ marginRight: 8 }} />
+                        <Text style={styles.actionBtnText}>Ver Historias Destacadas del Circuito 🌟</Text>
+                      </TouchableOpacity>
                     </View>
                   )}
                 </ScrollView>
@@ -640,7 +526,7 @@ export async function registerForPushNotificationsAsync() {
               )}
             </>
           ) : (
-            // --- VISTAS ADMINISTRADOR / STAFF AMPLIA ---
+            // --- VISTAS ADMINISTRADOR / STAFF ---
             <>
               {adminTab === 'kpis' && (
                 <ScrollView 
@@ -776,7 +662,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.black },
   header: { backgroundColor: Colors.black, paddingVertical: 12, paddingHorizontal: 15, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#222' },
   headerBrand: { flexDirection: 'row', alignItems: 'center' },
-  logoHeaderImage: { width: 32, height: 32, borderRadius: 6, marginRight: 10 },
+  logoBadge: { width: 28, height: 28, borderRadius: 6, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', marginRight: 8 },
+  logoBadgeText: { color: Colors.white, fontWeight: 'bold', fontSize: 16 },
   headerTitle: { color: Colors.white, fontWeight: 'bold', fontSize: 16 },
   roleBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#333', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20 },
   roleBtnText: { color: Colors.white, fontSize: 11, fontWeight: 'bold' },
@@ -816,14 +703,13 @@ const styles = StyleSheet.create({
   testimonialDist: { color: Colors.primary, fontSize: 11, fontWeight: 'bold' },
   testimonialText: { color: Colors.gray, fontSize: 11, marginTop: 8, fontStyle: 'italic' },
   circuitCard: { backgroundColor: Colors.white, borderRadius: 12, overflow: 'hidden', marginBottom: 15, borderWidth: 1, borderColor: '#EEE' },
-  circuitImage: { width: '100%', height: 160 },
   circuitBody: { padding: 14 },
   circuitTitle: { fontSize: 16, fontWeight: 'bold', color: Colors.black },
   circuitBadge: { backgroundColor: Colors.primary, color: Colors.white, fontWeight: 'bold', fontSize: 10, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   circuitDesc: { color: Colors.gray, fontSize: 12, marginTop: 6, marginBottom: 10 },
   techDataGrid: { backgroundColor: Colors.background, padding: 10, borderRadius: 8 },
   techDataItem: { flexDirection: 'row', alignItems: 'center', marginVertical: 2 },
-  techDataText: { fontSize: 11, color: Colors.black, fontWeight: 'bold', marginLeft: 6 },
+  techDataText: { fontSize: 11, color: Colors.black, fontWeight: 'bold' },
   instaLinkCircuitText: { color: '#E1306C', fontWeight: 'bold', fontSize: 11, marginTop: 10, textAlign: 'right' },
   btnInstaStoryLink: { backgroundColor: '#E1306C', flexDirection: 'row', padding: 14, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginTop: 5 },
   faqItem: { backgroundColor: Colors.white, padding: 14, borderRadius: 8, marginBottom: 8 },
@@ -860,9 +746,6 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   chipText: { color: Colors.black, fontWeight: 'bold' },
   chipTextActive: { color: Colors.white },
-  infoCard: { backgroundColor: Colors.white, flexDirection: 'row', padding: 15, borderRadius: 10, alignItems: 'center' },
-  infoTitle: { fontWeight: 'bold', fontSize: 14, color: Colors.black },
-  infoDesc: { color: Colors.gray, fontSize: 12 },
   listRow: { backgroundColor: Colors.white, padding: 12, borderRadius: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   listName: { fontWeight: 'bold', fontSize: 14, color: Colors.black },
   listDetail: { color: Colors.gray, fontSize: 11 },
