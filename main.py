@@ -274,6 +274,10 @@ def obtener_kpis(db: Session = Depends(get_db)):
         "total_inscriptos": total,
         "total_acreditados": acreditados,
         "pendientes_kit": total - acreditados,
+        "control_medallas": {
+            "medallas_entregadas": acreditados,
+            "medallas_en_stock": max(0, 2000 - acreditados)
+        },
         "distribucion": {
             "5K": db.query(models.Usuario).filter(models.Usuario.distancia == "5K").count(),
             "10K": db.query(models.Usuario).filter(models.Usuario.distancia == "10K").count(),
