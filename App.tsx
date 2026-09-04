@@ -1,24 +1,65 @@
 import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, 
-  Alert, StatusBar, RefreshControl, Modal, Linking, Image 
+  Alert, StatusBar, RefreshControl, Modal, Linking, Platform 
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
 import CameraScreen from './src/CameraScreen';
 import AdminScannerScreen from './src/AdminScannerScreen';
 import CommunityFeedScreen from './src/CommunityFeedScreen';
 import PerfilScreen from './src/PerfilScreen';
 import { Colors } from './colors';
 
-import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
-
-// URL Pública de Producción en Railway.com
 const API_URL = 'https://backend-mijovi-production.up.railway.app';
 const INSTAGRAM_PROFILE_URL = 'https://www.instagram.com/maratonmijovi/?hl=es';
-const INSTAGRAM_HIGHLIGHTS_URL = 'https://www.instagram.com/stories/highlights/17941850090997104/?hl=es';
+
+// Handler global de notificaciones configurado al nivel superior (top-level)
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
+// Función de registro exportada correctamente al nivel superior
+export async function registerForPushNotificationsAsync() {
+  let token;
+
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'default',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#F15A24',
+    });
+  }
+
+  if (Device.isDevice) {
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    
+    if (finalStatus !== 'granted') {
+      return;
+    }
+    
+    try {
+      token = (await Notifications.getExpoPushTokenAsync()).data;
+    } catch (e) {
+      console.log("Error al obtener push token:", e);
+    }
+  }
+
+  return token;
+}
 
 export default function App() {
   const [isAdminMode, setIsAdminMode] = useState(false);
@@ -30,7 +71,6 @@ export default function App() {
   const [eventoSection, setEventoSection] = useState<'inicio' | 'registro' | 'info'>('inicio');
   const [adminTab, setAdminTab] = useState<'kpis' | 'escaner' | 'listado'>('kpis');
 
-  const [faqOpen, setFaqOpen] = useState<number | null>(null);
   const [busqueda, setBusqueda] = useState('');
 
   // Formulario Registro Corredor
