@@ -49,6 +49,7 @@ class ValidarQRRequest(BaseModel):
 class FotoSubidaRequest(BaseModel):
     usuario_nombre: str
     imagen_url: str
+    categoria: str = "General"
 
 class CambiarDistanciaRequest(BaseModel):
     dni: str
@@ -238,7 +239,11 @@ def obtener_fotos(db: Session = Depends(get_db)):
 
 @app.post("/api/fotos", status_code=status.HTTP_201_CREATED)
 def subir_foto(foto: FotoSubidaRequest, db: Session = Depends(get_db)):
-    nueva_foto = models.FotoComunidad(usuario_nombre=foto.usuario_nombre, imagen_url=foto.imagen_url)
+    nueva_foto = models.FotoComunidad(
+        usuario_nombre=foto.usuario_nombre, 
+        imagen_url=foto.imagen_url,
+        categoria=foto.categoria
+    )
     db.add(nueva_foto)
     db.commit()
     db.refresh(nueva_foto)
