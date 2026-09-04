@@ -34,3 +34,14 @@ class FotoComunidad(Base):
     imagen_url = Column(String, nullable=False)
     categoria = Column(String, default="General")
     fecha_subida = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+# push_token = Column(String, nullable=True)
+
+class RegistroCorredor(BaseModel):
+    nombre_completo: str
+    dni: str
+    email: EmailStr
+    distancia: str
+    talle_remera: str
+    push_token: str | None = None  # Agregamos el token opcional

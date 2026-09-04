@@ -1,7 +1,9 @@
 import os
+import csv
 import datetime
-from typing import List, Optional
+from io import StringIO
 from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
@@ -10,15 +12,11 @@ from dotenv import load_dotenv
 import models
 from database import engine, SessionLocal
 
-# Cargar variables de entorno
 load_dotenv()
-
-# Crear tablas automáticamente
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="API Maratón Mijovi S.R.L.")
 
-# Configuración de Mail
 mail_config = ConnectionConfig(
     MAIL_USERNAME=os.getenv("MAIL_USERNAME", "usuario@gmail.com"),
     MAIL_PASSWORD=os.getenv("MAIL_PASSWORD", "password"),
@@ -38,7 +36,6 @@ def get_db():
     finally:
         db.close()
 
-# SCHEMAS DE VALIDACIÓN
 class RegistroCorredor(BaseModel):
     nombre_completo: str
     dni: str
@@ -49,19 +46,14 @@ class RegistroCorredor(BaseModel):
 class ValidarQRRequest(BaseModel):
     qr_code: str
 
-class AlbumOficialCreate(BaseModel):
-    titulo: str
-    subtitulo: Optional[str] = None
-    google_photos_url: str
-    portada_url: str
-    fecha_evento: str
-
 class FotoSubidaRequest(BaseModel):
     usuario_nombre: str
     imagen_url: str
-    categoria: Optional[str] = "General"
 
-# ENVIAR CORREO EN SEGUNDO PLANO
+class CambiarDistanciaRequest(BaseModel):
+    dni: str
+    nueva_distancia: str
+
 async def enviar_correo_confirmacion(email_destino: str, nombre: str, dni: str, distancia: str, qr_code: str, talle: str):
     qr_image_url = f"https://quickchart.io/qr?text={qr_code}&size=200"
 
@@ -69,23 +61,25 @@ async def enviar_correo_confirmacion(email_destino: str, nombre: str, dni: str, 
     <!DOCTYPE html>
     <html>
     <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
-        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 10px; overflow: hidden;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
             <div style="background-color: #000000; padding: 20px; text-align: center;">
-                <h1 style="color: #F15A24; margin: 0;">MARATÓN MIJOVI 2027</h1>
+                <h1 style="color: #F15A24; margin: 0; font-size: 24px;">MARATÓN MIJOVI 2027</h1>
             </div>
             <div style="padding: 30px; text-align: center;">
-                <h2>¡Inscripción Confirmada! 🎉</h2>
-                <p>Hola <strong>{nombre}</strong>, tu registro se completó con éxito.</p>
-                
+                <h2 style="color: #333333; margin-top: 0;">¡Inscripción Confirmada! 🎉</h2>
+                <p style="color: #666666; font-size: 16px;">Hola <strong>{nombre}</strong>, tu registro se completó con éxito.</p>
                 <div style="background-color: #f9f9f9; border-left: 4px solid #F15A24; padding: 15px; text-align: left; margin: 20px 0;">
-                    <p><strong>DNI:</strong> {dni}</p>
-                    <p><strong>Distancia:</strong> {distancia}</p>
-                    <p><strong>Talle:</strong> {talle}</p>
-                    <p><strong>Código Pase:</strong> {qr_code}</p>
+                    <p style="margin: 5px 0; color: #333;"><strong>DNI:</strong> {dni}</p>
+                    <p style="margin: 5px 0; color: #333;"><strong>Distancia:</strong> {distancia}</p>
+                    <p style="margin: 5px 0; color: #333;"><strong>Talle de Remera:</strong> {talle}</p>
+                    <p style="margin: 5px 0; color: #333;"><strong>Código Pase:</strong> {qr_code}</p>
                 </div>
-
-                <p style="font-weight: bold;">Tu QR de Acreditación:</p>
-                <img src="{qr_image_url}" alt="QR Acreditación" style="width: 180px; height: 180px; border: 1px solid #ddd; padding: 5px; border-radius: 8px;">
+                <p style="color: #333; font-weight: bold;">Tu Código QR de Acreditación:</p>
+                <img src="{qr_image_url}" alt="Código QR Acreditación" style="width: 180px; height: 180px; border: 2px solid #ddd; padding: 5px; border-radius: 8px; margin-bottom: 15px;">
+                <p style="color: #888888; font-size: 13px;">Presenta este código QR desde tu celular o impreso el día del retiro de kits.</p>
+            </div>
+            <div style="background-color: #f4f4f4; padding: 15px; text-align: center; color: #888888; font-size: 12px;">
+                Mijovi S.R.L. © 2027 - Todos los derechos reservados.
             </div>
         </div>
     </body>
@@ -103,19 +97,16 @@ async def enviar_correo_confirmacion(email_destino: str, nombre: str, dni: str, 
     try:
         await fastmail.send_message(message)
     except Exception as e:
-        print(f"Error enviando correo a {email_destino}: {e}")
+        print(f"Error al enviar correo a {email_destino}: {e}")
 
-# ENDPOINTS
 @app.post("/api/registro", status_code=status.HTTP_201_CREATED)
 def registrar_corredor(corredor: RegistroCorredor, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     if db.query(models.Usuario).filter(models.Usuario.dni == corredor.dni).first():
         raise HTTPException(status_code=400, detail="El DNI ya se encuentra registrado.")
-    
     if db.query(models.Usuario).filter(models.Usuario.email == corredor.email).first():
         raise HTTPException(status_code=400, detail="El correo electrónico ya se encuentra registrado.")
     
     qr_generado = f"MIJOVI-{corredor.dni}-{corredor.distancia}"
-    
     nuevo_usuario = models.Usuario(
         nombre_completo=corredor.nombre_completo,
         dni=corredor.dni,
@@ -145,73 +136,143 @@ def registrar_corredor(corredor: RegistroCorredor, background_tasks: BackgroundT
 def buscar_inscripcion(dni: str, db: Session = Depends(get_db)):
     corredor = db.query(models.Usuario).filter(models.Usuario.dni == dni).first()
     if not corredor:
-        raise HTTPException(status_code=404, detail="Inscripción no encontrada.")
+        raise HTTPException(status_code=404, detail="Inscripción no encontrada para este DNI.")
     return corredor
+
+@app.put("/api/corredor/cambiar-distancia")
+def cambiar_distancia_corredor(payload: CambiarDistanciaRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    corredor = db.query(models.Usuario).filter(models.Usuario.dni == payload.dni).first()
+    if not corredor:
+        raise HTTPException(status_code=404, detail="Inscripción no encontrada.")
+    if corredor.acreditado:
+        raise HTTPException(status_code=400, detail="⚠️ No es posible cambiar la distancia: Kit ya entregado.")
+    if corredor.distancia == payload.nueva_distancia:
+        raise HTTPException(status_code=400, detail="Ya estás inscripto en esta categoría.")
+    
+    corredor.distancia = payload.nueva_distancia
+    corredor.qr_code = f"MIJOVI-{corredor.dni}-{payload.nueva_distancia}"
+    db.commit()
+    db.refresh(corredor)
+
+    background_tasks.add_task(
+        enviar_correo_confirmacion,
+        email_destino=corredor.email,
+        nombre=corredor.nombre_completo,
+        dni=corredor.dni,
+        distancia=corredor.distancia,
+        qr_code=corredor.qr_code,
+        talle=corredor.talle_remera
+    )
+
+    return {"status": "exito", "mensaje": f"Categoría actualizada a {corredor.distancia}.", "corredor": corredor}
 
 @app.post("/api/admin/acreditar")
 def acreditar_corredor(payload: ValidarQRRequest, db: Session = Depends(get_db)):
     corredor = db.query(models.Usuario).filter(models.Usuario.qr_code == payload.qr_code).first()
     if not corredor:
         raise HTTPException(status_code=404, detail="Código QR no válido.")
-    
     if corredor.acreditado:
-        fecha_str = corredor.fecha_acreditacion.strftime('%d/%m/%Y a las %H:%M') if corredor.fecha_acreditacion else "previamente"
-        raise HTTPException(status_code=400, detail=f"⚠️ El kit de {corredor.nombre_completo} YA FUE ENTREGADO el {fecha_str} hs.")
+        fecha_str = corredor.fecha_acreditacion.strftime('%d/%m/%Y %H:%M') if corredor.fecha_acreditacion else "previamente"
+        raise HTTPException(status_code=400, detail=f"⚠️ ¡ALERTA! Kit ya entregado el {fecha_str} hs.")
     
     corredor.acreditado = True
     corredor.fecha_acreditacion = datetime.datetime.now()
     db.commit()
     
-    return {"status": "exito", "mensaje": "✅ Kit Acreditado y Entregado", "corredor": {"nombre": corredor.nombre_completo, "dni": corredor.dni}}
+    return {"status": "exito", "mensaje": "✅ Kit Entregado", "corredor": {"nombre": corredor.nombre_completo, "dni": corredor.dni, "distancia": corredor.distancia, "talle": corredor.talle_remera}}
+
+@app.post("/api/admin/acreditar-manual/{dni}")
+def acreditar_manual(dni: str, db: Session = Depends(get_db)):
+    corredor = db.query(models.Usuario).filter(models.Usuario.dni == dni).first()
+    if not corredor:
+        raise HTTPException(status_code=404, detail="Corredor no encontrado.")
+    if corredor.acreditado:
+        raise HTTPException(status_code=400, detail="Este kit ya fue entregado.")
+    
+    corredor.acreditado = True
+    corredor.fecha_acreditacion = datetime.datetime.now()
+    db.commit()
+    return {"mensaje": f"✅ Kit de {corredor.nombre_completo} acreditado manualmente."}
 
 @app.get("/api/admin/corredores")
 def listar_todos_corredores(db: Session = Depends(get_db)):
-    return db.query(models.Usuario).all()
+    corredores = db.query(models.Usuario).all()
+    return [
+        {
+            "id": c.id,
+            "nombre_completo": c.nombre_completo,
+            "dni": c.dni,
+            "email": c.email,
+            "distancia": c.distancia,
+            "talle_remera": c.talle_remera,
+            "qr_code": c.qr_code,
+            "acreditado": bool(c.acreditado) if c.acreditado is not None else False,
+            "fecha_acreditacion": c.fecha_acreditacion
+        }
+        for c in corredores
+    ]
 
-# --- ÁLBUMES OFICIALES (GOOGLE PHOTOS) ---
-@app.get("/api/albumes-oficiales")
-def obtener_albumes_oficiales(db: Session = Depends(get_db)):
-    return db.query(models.AlbumOficial).all()
+@app.get("/api/admin/exportar-csv")
+def exportar_csv_corredores(db: Session = Depends(get_db)):
+    corredores = db.query(models.Usuario).all()
+    f = StringIO()
+    writer = csv.writer(f)
+    writer.writerow(["ID", "Nombre Completo", "DNI", "Email", "Distancia", "Talle Remera", "QR Code", "Acreditado", "Fecha Acreditacion"])
+    
+    for c in corredores:
+        writer.writerow([
+            c.id, c.nombre_completo, c.dni, c.email, 
+            c.distancia, c.talle_remera, c.qr_code, 
+            "SI" if c.acreditado else "NO", 
+            c.fecha_acreditacion.strftime('%Y-%m-%d %H:%M:%S') if c.fecha_acreditacion else ""
+        ])
+    
+    f.seek(0)
+    response = StreamingResponse(iter([f.getvalue()]), media_type="text/csv")
+    response.headers["Content-Disposition"] = "attachment; filename=corredores_maraton_mijovi.csv"
+    return response
 
-@app.post("/api/admin/albumes-oficiales", status_code=status.HTTP_201_CREATED)
-def crear_album_oficial(album: AlbumOficialCreate, db: Session = Depends(get_db)):
-    nuevo_album = models.AlbumOficial(**album.dict())
-    db.add(nuevo_album)
-    db.commit()
-    db.refresh(nuevo_album)
-    return nuevo_album
+@app.get("/api/fotos")
+def obtener_fotos(db: Session = Depends(get_db)):
+    return db.query(models.FotoComunidad).order_by(models.FotoComunidad.fecha_subida.desc()).all()
 
-# --- MURO COMUNITARIO ---
 @app.post("/api/fotos", status_code=status.HTTP_201_CREATED)
 def subir_foto(foto: FotoSubidaRequest, db: Session = Depends(get_db)):
-    nueva_foto = models.FotoComunidad(
-        usuario_nombre=foto.usuario_nombre,
-        imagen_url=foto.imagen_url,
-        categoria=foto.categoria
-    )
+    nueva_foto = models.FotoComunidad(usuario_nombre=foto.usuario_nombre, imagen_url=foto.imagen_url)
     db.add(nueva_foto)
     db.commit()
     db.refresh(nueva_foto)
     return {"mensaje": "Foto publicada", "id": nueva_foto.id}
 
-@app.get("/api/fotos")
-def obtener_fotos(categoria: Optional[str] = None, db: Session = Depends(get_db)):
-    query = db.query(models.FotoComunidad)
-    if categoria and categoria != "Todos":
-        query = query.filter(models.FotoComunidad.categoria == categoria)
-    return query.order_by(models.FotoComunidad.fecha_subida.desc()).all()
+@app.delete("/api/fotos/{foto_id}")
+def eliminar_foto(foto_id: int, db: Session = Depends(get_db)):
+    foto = db.query(models.FotoComunidad).filter(models.FotoComunidad.id == foto_id).first()
+    if not foto:
+        raise HTTPException(status_code=404, detail="Foto no encontrada")
+    db.delete(foto)
+    db.commit()
+    return {"mensaje": "Foto eliminada con éxito"}
 
 @app.get("/api/kpis")
 def obtener_kpis(db: Session = Depends(get_db)):
     total = db.query(models.Usuario).count()
     acreditados = db.query(models.Usuario).filter(models.Usuario.acreditado.is_(True)).count()
-    k5 = db.query(models.Usuario).filter(models.Usuario.distancia == "5K").count()
-    k10 = db.query(models.Usuario).filter(models.Usuario.distancia == "10K").count()
-    k21 = db.query(models.Usuario).filter(models.Usuario.distancia == "21K").count()
     
+    talles = ["S", "M", "L", "XL", "XXL"]
+    inventario = {}
+    for t in talles:
+        sol = db.query(models.Usuario).filter(models.Usuario.talle_remera == t).count()
+        ent = db.query(models.Usuario).filter(models.Usuario.talle_remera == t, models.Usuario.acreditado.is_(True)).count()
+        inventario[t] = {"solicitados": sol, "entregados": ent, "pendientes": sol - ent}
+
     return {
         "total_inscriptos": total,
         "total_acreditados": acreditados,
         "pendientes_kit": total - acreditados,
-        "distribucion": {"5K": k5, "10K": k10, "21K": k21}
+        "distribucion": {
+            "5K": db.query(models.Usuario).filter(models.Usuario.distancia == "5K").count(),
+            "10K": db.query(models.Usuario).filter(models.Usuario.distancia == "10K").count(),
+            "21K": db.query(models.Usuario).filter(models.Usuario.distancia == "21K").count()
+        },
+        "inventario_talles": inventario
     }
