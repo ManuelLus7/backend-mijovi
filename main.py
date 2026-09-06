@@ -40,6 +40,22 @@ def get_db():
     finally:
         db.close()
 
+<<<<<<< HEAD
+=======
+class RegistroCorredor(BaseModel):
+    nombre_completo: str
+    dni: str
+    email: EmailStr
+    genero: str
+    fecha_nacimiento: str
+    whatsapp: str
+    telefono_emergencia: str
+    grupo_sanguineo: str
+    certificado_medico_url: str = None
+    distancia: str
+    talle_remera: str
+
+>>>>>>> 57a0cff (Sincronización de stock de remeras y exportación CSV)
 class ValidarQRRequest(BaseModel):
     qr_code: str
 
@@ -120,6 +136,7 @@ async def registrar_corredor(
 
     qr_generado = f"MIJOVI-{dni}-{distancia}"
     nuevo_usuario = models.Usuario(
+<<<<<<< HEAD
         nombre_completo=nombre_completo,
         dni=dni,
         email=email,
@@ -131,6 +148,19 @@ async def registrar_corredor(
         certificado_medico_url=pdf_path,
         distancia=distancia,
         talle_remera=talle_remera,
+=======
+        nombre_completo=corredor.nombre_completo,
+        dni=corredor.dni,
+        email=corredor.email,
+        genero=corredor.genero,
+        fecha_nacimiento=corredor.fecha_nacimiento,
+        whatsapp=corredor.whatsapp,
+        telefono_emergencia=corredor.telefono_emergencia,
+        grupo_sanguineo=corredor.grupo_sanguineo,
+        certificado_medico_url=corredor.certificado_medico_url,
+        distancia=corredor.distancia,
+        talle_remera=corredor.talle_remera,
+>>>>>>> 57a0cff (Sincronización de stock de remeras y exportación CSV)
         qr_code=qr_generado,
         acreditado=False
     )
@@ -174,6 +204,7 @@ def cambiar_datos_corredor(payload: CambiarDatosRequest, db: Session = Depends(g
     db.commit()
     db.refresh(corredor)
     return {"status": "exito", "mensaje": "Datos actualizados correctamente.", "corredor": corredor}
+<<<<<<< HEAD
 
 @app.get("/api/admin/descargar-certificado/{dni}")
 def descargar_certificado(dni: str, db: Session = Depends(get_db)):
@@ -181,6 +212,8 @@ def descargar_certificado(dni: str, db: Session = Depends(get_db)):
     if not corredor or not corredor.certificado_medico_url or not os.path.exists(corredor.certificado_medico_url):
         raise HTTPException(status_code=404, detail="Certificado médico no encontrado para este corredor.")
     return FileResponse(corredor.certificado_medico_url, media_type="application/pdf", filename=f"certificado_{dni}.pdf")
+=======
+>>>>>>> 57a0cff (Sincronización de stock de remeras y exportación CSV)
 
 @app.post("/api/admin/acreditar")
 def acreditar_corredor(payload: ValidarQRRequest, db: Session = Depends(get_db)):
@@ -217,12 +250,20 @@ def exportar_csv_corredores(db: Session = Depends(get_db)):
     corredores = db.query(models.Usuario).all()
     f = StringIO()
     writer = csv.writer(f)
+<<<<<<< HEAD
     writer.writerow(["ID", "Nombre Completo", "DNI", "Email", "Género", "F. Nacimiento", "WhatsApp", "Tel. Emergencia", "Grupo Sanguíneo", "Certificado Médico", "Distancia", "Talle Remera", "QR Code", "Acreditado", "Fecha Acreditacion"])
+=======
+    writer.writerow(["ID", "Nombre Completo", "DNI", "Email", "Género", "F. Nacimiento", "WhatsApp", "Tel. Emergencia", "Grupo Sanguíneo", "Certificado Médico URL", "Distancia", "Talle Remera", "QR Code", "Acreditado", "Fecha Acreditacion"])
+>>>>>>> 57a0cff (Sincronización de stock de remeras y exportación CSV)
     
     for c in corredores:
         writer.writerow([
             c.id, c.nombre_completo, c.dni, c.email, c.genero, c.fecha_nacimiento,
+<<<<<<< HEAD
             c.whatsapp, c.telefono_emergencia, c.grupo_sanguineo, "Adjunto" if c.certificado_medico_url else "No Adjunto",
+=======
+            c.whatsapp, c.telefono_emergencia, c.grupo_sanguineo, c.certificado_medico_url or "",
+>>>>>>> 57a0cff (Sincronización de stock de remeras y exportación CSV)
             c.distancia, c.talle_remera, c.qr_code, 
             "SI" if c.acreditado else "NO", 
             c.fecha_acreditacion.strftime('%Y-%m-%d %H:%M:%S') if c.fecha_acreditacion else ""
