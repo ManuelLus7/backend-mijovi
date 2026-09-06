@@ -2,8 +2,8 @@ import os
 import csv
 import datetime
 from io import StringIO
-from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, UploadFile, File, Form
+from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
@@ -16,6 +16,10 @@ load_dotenv()
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="API Maratón Mijovi S.R.L.")
+
+# Directorio local para guardar los PDFs escaneados de certificados médicos
+UPLOAD_DIR = "uploads_certificados"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 mail_config = ConnectionConfig(
     MAIL_USERNAME=os.getenv("MAIL_USERNAME", "usuario@gmail.com"),
@@ -36,13 +40,6 @@ def get_db():
     finally:
         db.close()
 
-class RegistroCorredor(BaseModel):
-    nombre_completo: str
-    dni: str
-    email: EmailStr
-    distancia: str
-    talle_remera: str
-
 class ValidarQRRequest(BaseModel):
     qr_code: str
 
@@ -51,9 +48,10 @@ class FotoSubidaRequest(BaseModel):
     imagen_url: str
     categoria: str = "General"
 
-class CambiarDistanciaRequest(BaseModel):
+class CambiarDatosRequest(BaseModel):
     dni: str
-    nueva_distancia: str
+    nueva_distancia: str = None
+    nuevo_talle: str = None
 
 async def enviar_correo_confirmacion(email_destino: str, nombre: str, dni: str, distancia: str, qr_code: str, talle: str):
     qr_image_url = f"https://quickchart.io/qr?text={qr_code}&size=200"
@@ -74,8 +72,6 @@ async def enviar_correo_confirmacion(email_destino: str, nombre: str, dni: str, 
                     <p style="margin: 5px 0; color: #333;"><strong>Talle de Remera:</strong> {talle}</p>
                     <p style="margin: 5px 0; color: #333;"><strong>Código Pase:</strong> {qr_code}</p>
                 </div>
-                <p style="color: #333; font-weight: bold;">Tu Código QR de Acreditación:</p>
-                <img src="{qr_image_url}" alt="Código QR Acreditación" style="width: 180px; height: 180px; border: 2px solid #ddd; padding: 5px; border-radius: 8px; margin-bottom: 15px;">
             </div>
         </div>
     </body>
@@ -94,19 +90,47 @@ async def enviar_correo_confirmacion(email_destino: str, nombre: str, dni: str, 
         print(f"Error al enviar correo a {email_destino}: {e}")
 
 @app.post("/api/registro", status_code=status.HTTP_201_CREATED)
-def registrar_corredor(corredor: RegistroCorredor, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    if db.query(models.Usuario).filter(models.Usuario.dni == corredor.dni).first():
+async def registrar_corredor(
+    background_tasks: BackgroundTasks,
+    nombre_completo: str = Form(...),
+    dni: str = Form(...),
+    email: EmailStr = Form(...),
+    genero: str = Form(...),
+    fecha_nacimiento: str = Form(...),
+    whatsapp: str = Form(...),
+    telefono_emergencia: str = Form(...),
+    grupo_sanguineo: str = Form(...),
+    distancia: str = Form(...),
+    talle_remera: str = Form(...),
+    certificado_pdf: UploadFile = File(None),
+    db: Session = Depends(get_db)
+):
+    if db.query(models.Usuario).filter(models.Usuario.dni == dni).first():
         raise HTTPException(status_code=400, detail="El DNI ya se encuentra registrado.")
-    if db.query(models.Usuario).filter(models.Usuario.email == corredor.email).first():
+    if db.query(models.Usuario).filter(models.Usuario.email == email).first():
         raise HTTPException(status_code=400, detail="El correo electrónico ya se encuentra registrado.")
     
-    qr_generado = f"MIJOVI-{corredor.dni}-{corredor.distancia}"
+    pdf_path = None
+    if certificado_pdf:
+        file_ext = certificado_pdf.filename.split(".")[-1]
+        file_name = f"certificado_{dni}.{file_ext}"
+        pdf_path = os.path.join(UPLOAD_DIR, file_name)
+        with open(pdf_path, "wb") as buffer:
+            buffer.write(await certificado_pdf.read())
+
+    qr_generado = f"MIJOVI-{dni}-{distancia}"
     nuevo_usuario = models.Usuario(
-        nombre_completo=corredor.nombre_completo,
-        dni=corredor.dni,
-        email=corredor.email,
-        distancia=corredor.distancia,
-        talle_remera=corredor.talle_remera,
+        nombre_completo=nombre_completo,
+        dni=dni,
+        email=email,
+        genero=genero,
+        fecha_nacimiento=fecha_nacimiento,
+        whatsapp=whatsapp,
+        telefono_emergencia=telefono_emergencia,
+        grupo_sanguineo=grupo_sanguineo,
+        certificado_medico_url=pdf_path,
+        distancia=distancia,
+        talle_remera=talle_remera,
         qr_code=qr_generado,
         acreditado=False
     )
@@ -116,12 +140,12 @@ def registrar_corredor(corredor: RegistroCorredor, background_tasks: BackgroundT
 
     background_tasks.add_task(
         enviar_correo_confirmacion,
-        email_destino=corredor.email,
-        nombre=corredor.nombre_completo,
-        dni=corredor.dni,
-        distancia=corredor.distancia,
+        email_destino=email,
+        nombre=nombre_completo,
+        dni=dni,
+        distancia=distancia,
         qr_code=qr_generado,
-        talle=corredor.talle_remera
+        talle=talle_remera
     )
     return {"mensaje": "Inscripción exitosa.", "qr_code": qr_generado, "id": nuevo_usuario.id}
 
@@ -132,19 +156,31 @@ def buscar_inscripcion(dni: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Inscripción no encontrada para este DNI.")
     return corredor
 
-@app.put("/api/corredor/cambiar-distancia")
-def cambiar_distancia_corredor(payload: CambiarDistanciaRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+@app.put("/api/corredor/cambiar-datos")
+def cambiar_datos_corredor(payload: CambiarDatosRequest, db: Session = Depends(get_db)):
     corredor = db.query(models.Usuario).filter(models.Usuario.dni == payload.dni).first()
     if not corredor:
         raise HTTPException(status_code=404, detail="Inscripción no encontrada.")
     if corredor.acreditado:
-        raise HTTPException(status_code=400, detail="⚠️ Kit ya entregado. No se puede cambiar la distancia.")
+        raise HTTPException(status_code=400, detail="⚠️ Kit ya entregado. No se pueden modificar los datos.")
     
-    corredor.distancia = payload.nueva_distancia
-    corredor.qr_code = f"MIJOVI-{corredor.dni}-{payload.nueva_distancia}"
+    if payload.nueva_distancia:
+        corredor.distancia = payload.nueva_distancia
+        corredor.qr_code = f"MIJOVI-{corredor.dni}-{payload.nueva_distancia}"
+    
+    if payload.nuevo_talle:
+        corredor.talle_remera = payload.nuevo_talle
+
     db.commit()
     db.refresh(corredor)
-    return {"status": "exito", "mensaje": f"Categoría actualizada a {corredor.distancia}.", "corredor": corredor}
+    return {"status": "exito", "mensaje": "Datos actualizados correctamente.", "corredor": corredor}
+
+@app.get("/api/admin/descargar-certificado/{dni}")
+def descargar_certificado(dni: str, db: Session = Depends(get_db)):
+    corredor = db.query(models.Usuario).filter(models.Usuario.dni == dni).first()
+    if not corredor or not corredor.certificado_medico_url or not os.path.exists(corredor.certificado_medico_url):
+        raise HTTPException(status_code=404, detail="Certificado médico no encontrado para este corredor.")
+    return FileResponse(corredor.certificado_medico_url, media_type="application/pdf", filename=f"certificado_{dni}.pdf")
 
 @app.post("/api/admin/acreditar")
 def acreditar_corredor(payload: ValidarQRRequest, db: Session = Depends(get_db)):
@@ -176,17 +212,17 @@ def acreditar_manual(dni: str, db: Session = Depends(get_db)):
 def listar_todos_corredores(db: Session = Depends(get_db)):
     return db.query(models.Usuario).all()
 
-# Endpoint Exportación CSV corregido y sin errores de ruta
 @app.get("/api/admin/exportar-csv")
 def exportar_csv_corredores(db: Session = Depends(get_db)):
     corredores = db.query(models.Usuario).all()
     f = StringIO()
     writer = csv.writer(f)
-    writer.writerow(["ID", "Nombre Completo", "DNI", "Email", "Distancia", "Talle Remera", "QR Code", "Acreditado", "Fecha Acreditacion"])
+    writer.writerow(["ID", "Nombre Completo", "DNI", "Email", "Género", "F. Nacimiento", "WhatsApp", "Tel. Emergencia", "Grupo Sanguíneo", "Certificado Médico", "Distancia", "Talle Remera", "QR Code", "Acreditado", "Fecha Acreditacion"])
     
     for c in corredores:
         writer.writerow([
-            c.id, c.nombre_completo, c.dni, c.email, 
+            c.id, c.nombre_completo, c.dni, c.email, c.genero, c.fecha_nacimiento,
+            c.whatsapp, c.telefono_emergencia, c.grupo_sanguineo, "Adjunto" if c.certificado_medico_url else "No Adjunto",
             c.distancia, c.talle_remera, c.qr_code, 
             "SI" if c.acreditado else "NO", 
             c.fecha_acreditacion.strftime('%Y-%m-%d %H:%M:%S') if c.fecha_acreditacion else ""
@@ -241,6 +277,10 @@ def obtener_kpis(db: Session = Depends(get_db)):
         "total_inscriptos": total,
         "total_acreditados": acreditados,
         "pendientes_kit": total - acreditados,
+        "control_medallas": {
+            "medallas_entregadas": acreditados,
+            "medallas_en_stock": max(0, 2000 - acreditados)
+        },
         "distribucion": {
             "5K": db.query(models.Usuario).filter(models.Usuario.distancia == "5K").count(),
             "10K": db.query(models.Usuario).filter(models.Usuario.distancia == "10K").count(),
