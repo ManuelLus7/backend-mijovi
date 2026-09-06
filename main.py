@@ -40,6 +40,12 @@ class RegistroCorredor(BaseModel):
     nombre_completo: str
     dni: str
     email: EmailStr
+    genero: str
+    fecha_nacimiento: str
+    whatsapp: str
+    telefono_emergencia: str
+    grupo_sanguineo: str
+    certificado_medico_url: str = None
     distancia: str
     talle_remera: str
 
@@ -51,9 +57,10 @@ class FotoSubidaRequest(BaseModel):
     imagen_url: str
     categoria: str = "General"
 
-class CambiarDistanciaRequest(BaseModel):
+class CambiarDatosRequest(BaseModel):
     dni: str
-    nueva_distancia: str
+    nueva_distancia: str = None
+    nuevo_talle: str = None
 
 async def enviar_correo_confirmacion(email_destino: str, nombre: str, dni: str, distancia: str, qr_code: str, talle: str):
     qr_image_url = f"https://quickchart.io/qr?text={qr_code}&size=200"
@@ -105,6 +112,12 @@ def registrar_corredor(corredor: RegistroCorredor, background_tasks: BackgroundT
         nombre_completo=corredor.nombre_completo,
         dni=corredor.dni,
         email=corredor.email,
+        genero=corredor.genero,
+        fecha_nacimiento=corredor.fecha_nacimiento,
+        whatsapp=corredor.whatsapp,
+        telefono_emergencia=corredor.telefono_emergencia,
+        grupo_sanguineo=corredor.grupo_sanguineo,
+        certificado_medico_url=corredor.certificado_medico_url,
         distancia=corredor.distancia,
         talle_remera=corredor.talle_remera,
         qr_code=qr_generado,
@@ -132,19 +145,24 @@ def buscar_inscripcion(dni: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Inscripción no encontrada para este DNI.")
     return corredor
 
-@app.put("/api/corredor/cambiar-distancia")
-def cambiar_distancia_corredor(payload: CambiarDistanciaRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+@app.put("/api/corredor/cambiar-datos")
+def cambiar_datos_corredor(payload: CambiarDatosRequest, db: Session = Depends(get_db)):
     corredor = db.query(models.Usuario).filter(models.Usuario.dni == payload.dni).first()
     if not corredor:
         raise HTTPException(status_code=404, detail="Inscripción no encontrada.")
     if corredor.acreditado:
-        raise HTTPException(status_code=400, detail="⚠️ Kit ya entregado. No se puede cambiar la distancia.")
+        raise HTTPException(status_code=400, detail="⚠️ Kit ya entregado. No se pueden modificar los datos.")
     
-    corredor.distancia = payload.nueva_distancia
-    corredor.qr_code = f"MIJOVI-{corredor.dni}-{payload.nueva_distancia}"
+    if payload.nueva_distancia:
+        corredor.distancia = payload.nueva_distancia
+        corredor.qr_code = f"MIJOVI-{corredor.dni}-{payload.nueva_distancia}"
+    
+    if payload.nuevo_talle:
+        corredor.talle_remera = payload.nuevo_talle
+
     db.commit()
     db.refresh(corredor)
-    return {"status": "exito", "mensaje": f"Categoría actualizada a {corredor.distancia}.", "corredor": corredor}
+    return {"status": "exito", "mensaje": "Datos actualizados correctamente.", "corredor": corredor}
 
 @app.post("/api/admin/acreditar")
 def acreditar_corredor(payload: ValidarQRRequest, db: Session = Depends(get_db)):
@@ -176,17 +194,17 @@ def acreditar_manual(dni: str, db: Session = Depends(get_db)):
 def listar_todos_corredores(db: Session = Depends(get_db)):
     return db.query(models.Usuario).all()
 
-# Endpoint Exportación CSV corregido y sin errores de ruta
 @app.get("/api/admin/exportar-csv")
 def exportar_csv_corredores(db: Session = Depends(get_db)):
     corredores = db.query(models.Usuario).all()
     f = StringIO()
     writer = csv.writer(f)
-    writer.writerow(["ID", "Nombre Completo", "DNI", "Email", "Distancia", "Talle Remera", "QR Code", "Acreditado", "Fecha Acreditacion"])
+    writer.writerow(["ID", "Nombre Completo", "DNI", "Email", "Género", "F. Nacimiento", "WhatsApp", "Tel. Emergencia", "Grupo Sanguíneo", "Certificado Médico URL", "Distancia", "Talle Remera", "QR Code", "Acreditado", "Fecha Acreditacion"])
     
     for c in corredores:
         writer.writerow([
-            c.id, c.nombre_completo, c.dni, c.email, 
+            c.id, c.nombre_completo, c.dni, c.email, c.genero, c.fecha_nacimiento,
+            c.whatsapp, c.telefono_emergencia, c.grupo_sanguineo, c.certificado_medico_url or "",
             c.distancia, c.talle_remera, c.qr_code, 
             "SI" if c.acreditado else "NO", 
             c.fecha_acreditacion.strftime('%Y-%m-%d %H:%M:%S') if c.fecha_acreditacion else ""
@@ -241,6 +259,10 @@ def obtener_kpis(db: Session = Depends(get_db)):
         "total_inscriptos": total,
         "total_acreditados": acreditados,
         "pendientes_kit": total - acreditados,
+        "control_medallas": {
+            "medallas_entregadas": acreditados,
+            "medallas_en_stock": max(0, 2000 - acreditados)
+        },
         "distribucion": {
             "5K": db.query(models.Usuario).filter(models.Usuario.distancia == "5K").count(),
             "10K": db.query(models.Usuario).filter(models.Usuario.distancia == "10K").count(),
