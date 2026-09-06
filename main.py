@@ -57,7 +57,6 @@ class CambiarDistanciaRequest(BaseModel):
 
 async def enviar_correo_confirmacion(email_destino: str, nombre: str, dni: str, distancia: str, qr_code: str, talle: str):
     qr_image_url = f"https://quickchart.io/qr?text={qr_code}&size=200"
-
     html_content = f"""
     <!DOCTYPE html>
     <html>
@@ -77,23 +76,17 @@ async def enviar_correo_confirmacion(email_destino: str, nombre: str, dni: str, 
                 </div>
                 <p style="color: #333; font-weight: bold;">Tu Código QR de Acreditación:</p>
                 <img src="{qr_image_url}" alt="Código QR Acreditación" style="width: 180px; height: 180px; border: 2px solid #ddd; padding: 5px; border-radius: 8px; margin-bottom: 15px;">
-                <p style="color: #888888; font-size: 13px;">Presenta este código QR desde tu celular o impreso el día del retiro de kits.</p>
-            </div>
-            <div style="background-color: #f4f4f4; padding: 15px; text-align: center; color: #888888; font-size: 12px;">
-                Mijovi S.R.L. © 2027 - Todos los derechos reservados.
             </div>
         </div>
     </body>
     </html>
     """
-
     message = MessageSchema(
         subject=f"🏁 Inscripción Confirmada - Maratón Mijovi ({distancia})",
         recipients=[email_destino],
         body=html_content,
         subtype=MessageType.html
     )
-
     fastmail = FastMail(mail_config)
     try:
         await fastmail.send_message(message)
@@ -130,7 +123,6 @@ def registrar_corredor(corredor: RegistroCorredor, background_tasks: BackgroundT
         qr_code=qr_generado,
         talle=corredor.talle_remera
     )
-
     return {"mensaje": "Inscripción exitosa.", "qr_code": qr_generado, "id": nuevo_usuario.id}
 
 @app.get("/api/corredor/dni/{dni}")
@@ -146,25 +138,12 @@ def cambiar_distancia_corredor(payload: CambiarDistanciaRequest, background_task
     if not corredor:
         raise HTTPException(status_code=404, detail="Inscripción no encontrada.")
     if corredor.acreditado:
-        raise HTTPException(status_code=400, detail="⚠️ No es posible cambiar la distancia: Kit ya entregado.")
-    if corredor.distancia == payload.nueva_distancia:
-        raise HTTPException(status_code=400, detail="Ya estás inscripto en esta categoría.")
+        raise HTTPException(status_code=400, detail="⚠️ Kit ya entregado. No se puede cambiar la distancia.")
     
     corredor.distancia = payload.nueva_distancia
     corredor.qr_code = f"MIJOVI-{corredor.dni}-{payload.nueva_distancia}"
     db.commit()
     db.refresh(corredor)
-
-    background_tasks.add_task(
-        enviar_correo_confirmacion,
-        email_destino=corredor.email,
-        nombre=corredor.nombre_completo,
-        dni=corredor.dni,
-        distancia=corredor.distancia,
-        qr_code=corredor.qr_code,
-        talle=corredor.talle_remera
-    )
-
     return {"status": "exito", "mensaje": f"Categoría actualizada a {corredor.distancia}.", "corredor": corredor}
 
 @app.post("/api/admin/acreditar")
@@ -173,13 +152,11 @@ def acreditar_corredor(payload: ValidarQRRequest, db: Session = Depends(get_db))
     if not corredor:
         raise HTTPException(status_code=404, detail="Código QR no válido.")
     if corredor.acreditado:
-        fecha_str = corredor.fecha_acreditacion.strftime('%d/%m/%Y %H:%M') if corredor.fecha_acreditacion else "previamente"
-        raise HTTPException(status_code=400, detail=f"⚠️ ¡ALERTA! Kit ya entregado el {fecha_str} hs.")
+        raise HTTPException(status_code=400, detail="⚠️ Kit ya entregado previamente.")
     
     corredor.acreditado = True
     corredor.fecha_acreditacion = datetime.datetime.now()
     db.commit()
-    
     return {"status": "exito", "mensaje": "✅ Kit Entregado", "corredor": {"nombre": corredor.nombre_completo, "dni": corredor.dni, "distancia": corredor.distancia, "talle": corredor.talle_remera}}
 
 @app.post("/api/admin/acreditar-manual/{dni}")
@@ -197,22 +174,9 @@ def acreditar_manual(dni: str, db: Session = Depends(get_db)):
 
 @app.get("/api/admin/corredores")
 def listar_todos_corredores(db: Session = Depends(get_db)):
-    corredores = db.query(models.Usuario).all()
-    return [
-        {
-            "id": c.id,
-            "nombre_completo": c.nombre_completo,
-            "dni": c.dni,
-            "email": c.email,
-            "distancia": c.distancia,
-            "talle_remera": c.talle_remera,
-            "qr_code": c.qr_code,
-            "acreditado": bool(c.acreditado) if c.acreditado is not None else False,
-            "fecha_acreditacion": c.fecha_acreditacion
-        }
-        for c in corredores
-    ]
+    return db.query(models.Usuario).all()
 
+# Endpoint Exportación CSV corregido y sin errores de ruta
 @app.get("/api/admin/exportar-csv")
 def exportar_csv_corredores(db: Session = Depends(get_db)):
     corredores = db.query(models.Usuario).all()
@@ -234,8 +198,11 @@ def exportar_csv_corredores(db: Session = Depends(get_db)):
     return response
 
 @app.get("/api/fotos")
-def obtener_fotos(db: Session = Depends(get_db)):
-    return db.query(models.FotoComunidad).order_by(models.FotoComunidad.fecha_subida.desc()).all()
+def obtener_fotos(categoria: str = None, db: Session = Depends(get_db)):
+    query = db.query(models.FotoComunidad)
+    if categoria and categoria != "Todos":
+        query = query.filter(models.FotoComunidad.categoria == categoria)
+    return query.order_by(models.FotoComunidad.fecha_subida.desc()).all()
 
 @app.post("/api/fotos", status_code=status.HTTP_201_CREATED)
 def subir_foto(foto: FotoSubidaRequest, db: Session = Depends(get_db)):
@@ -274,10 +241,6 @@ def obtener_kpis(db: Session = Depends(get_db)):
         "total_inscriptos": total,
         "total_acreditados": acreditados,
         "pendientes_kit": total - acreditados,
-        "control_medallas": {
-            "medallas_entregadas": acreditados,
-            "medallas_en_stock": max(0, 2000 - acreditados)
-        },
         "distribucion": {
             "5K": db.query(models.Usuario).filter(models.Usuario.distancia == "5K").count(),
             "10K": db.query(models.Usuario).filter(models.Usuario.distancia == "10K").count(),
