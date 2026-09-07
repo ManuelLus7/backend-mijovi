@@ -1,26 +1,27 @@
-import React, { useState, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as MediaLibrary from 'expo-media-library';
+import React, { useState, useEffect, useRef } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, Alert, ImageBackground, ActivityIndicator } from 'react-native';
+import { Camera, CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../colors';
 
-const API_URL = 'https://backend-mijovi-production.up.railway.app'; // O tu IP local si testeas localmente
+const API_URL = 'https://backend-mijovi-production.up.railway.app';
 
 export default function CameraScreen() {
+  const [facing, setFacing] = useState<'back' | 'front'>('back');
   const [permission, requestPermission] = useCameraPermissions();
-  const [mediaPermission, requestMediaPermission] = MediaLibrary.usePermissions();
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Previas');
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Previas 🏃');
   const [loading, setLoading] = useState(false);
   const cameraRef = useRef<any>(null);
 
-  if (!permission) return <View style={styles.container} />;
+  const categoriasDisponibles = ['Previas 🏃', 'Carrera 🏁', 'Medallas 🏅'];
+
+  if (!permission) return <View />;
   if (!permission.granted) {
     return (
-      <View style={styles.containerCenter}>
-        <Text style={styles.textInfo}>Permiso de cámara necesario para tomar fotos oficiales</Text>
-        <TouchableOpacity style={styles.btn} onPress={requestPermission}>
+      <View style={styles.centerContainer}>
+        <Text style={{ textAlign: 'center', marginBottom: 15, color: Colors.black }}>Necesitamos acceso a tu cámara para las fotos del muro.</Text>
+        <TouchableOpacity style={styles.btnPermiso} onPress={requestPermission}>
           <Text style={styles.btnText}>Otorgar Permiso</Text>
         </TouchableOpacity>
       </View>
@@ -29,49 +30,38 @@ export default function CameraScreen() {
 
   const takePicture = async () => {
     if (cameraRef.current) {
-      const options = { quality: 0.7, base64: true };
-      const data = await cameraRef.current.takePictureAsync(options);
-      setPhotoUri(data.uri);
-    }
-  };
-
-  const guardarEnGaleria = async () => {
-    if (!photoUri) return;
-    if (!mediaPermission?.granted) {
-      const permissionResponse = await requestMediaPermission();
-      if (!permissionResponse.granted) {
-        return Alert.alert("Permiso Denegado", "Necesitamos permiso para guardar fotos en tu galería.");
+      try {
+        const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.7 });
+        setCapturedImage(photo.uri);
+      } catch (e) {
+        Alert.alert("Error", "No se pudo capturar la foto");
       }
     }
-    try {
-      await MediaLibrary.saveToLibraryAsync(photoUri);
-      Alert.alert("¡Guardada! 📸", "La foto se guardó en la galería de tu celular.");
-    } catch (error) {
-      Alert.alert("Aviso", "No se pudo guardar automáticamente en el dispositivo.");
-    }
   };
 
-  const publicarEnMuro = async () => {
-    if (!photoUri) return;
+  const publicarFoto = async () => {
+    if (!capturedImage) return;
     setLoading(true);
     try {
+      // Simulación de subida de imagen y envío a la API
       const res = await fetch(`${API_URL}/api/fotos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          usuario_nombre: 'Corredor Mijovi',
-          imagen_url: photoUri,
+          usuario_nombre: "Corredor Mijovi",
+          imagen_url: capturedImage,
           categoria: categoriaSeleccionada
         })
       });
+
       if (res.ok) {
-        Alert.alert("¡Éxito! 🚀", `Tu foto fue publicada en la categoría [${categoriaSeleccionada}].`);
-        setPhotoUri(null);
+        Alert.alert("¡Éxito! 🎉", "Foto publicada correctamente en el muro.");
+        setCapturedImage(null);
       } else {
         Alert.alert("Error", "No se pudo publicar la foto en el servidor.");
       }
     } catch (e) {
-      Alert.alert("Error", "Error de conexión con el servidor.");
+      Alert.alert("Error de red", "Verifica tu conexión con el servidor.");
     } finally {
       setLoading(false);
     }
@@ -79,65 +69,45 @@ export default function CameraScreen() {
 
   return (
     <View style={styles.container}>
-      {!photoUri ? (
-        <View style={StyleSheet.absoluteFillObject}>
-          <CameraView style={StyleSheet.absoluteFillObject} ref={cameraRef} />
-
-          <View style={styles.frameContainer} pointerEvents="none">
-            <View style={styles.frameHeader}>
-              <Text style={styles.frameTitle}>MARATÓN MIJOVI 2027</Text>
-            </View>
-            <View style={styles.frameFooter}>
-              <Text style={styles.frameHashtag}>#MaratonMijovi2027</Text>
+      {!capturedImage ? (
+        <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
+          <View style={styles.overlayFrame}>
+            <View style={styles.watermark}>
+              <Text style={styles.watermarkText}>MARATÓN MIJOVI 2027 🏅</Text>
             </View>
           </View>
-
-          <View style={styles.actionContainer}>
+          <View style={styles.buttonContainer}>
             <TouchableOpacity style={styles.captureBtn} onPress={takePicture}>
-              <View style={styles.innerCaptureBtn} />
+              <View style={styles.captureBtnInner} />
             </TouchableOpacity>
           </View>
-        </View>
+        </CameraView>
       ) : (
-        <View style={styles.previewContainer}>
-          <Image source={{ uri: photoUri }} style={styles.previewImage} />
-          
-          {/* Selector de Categoría antes de Compartir */}
-          <Text style={styles.labelCat}>Clasifica tu foto para el Muro:</Text>
-          <View style={styles.rowCats}>
-            {['Previas', 'Carrera', 'Medallas'].map((cat) => (
-              <TouchableOpacity 
-                key={cat} 
-                style={[styles.chipCat, categoriaSeleccionada === cat && styles.chipCatActive]} 
-                onPress={() => setCategoriaSeleccionada(cat)}
-              >
-                <Text style={[styles.chipCatText, categoriaSeleccionada === cat && styles.chipCatTextActive]}>{cat}</Text>
+        <ImageBackground source={{ uri: capturedImage }} style={styles.preview}>
+          <View style={styles.previewOverlay}>
+            <Text style={styles.previewTitle}>Clasifica tu foto para el Muro:</Text>
+            <View style={styles.chipRow}>
+              {categoriasDisponibles.map((cat) => (
+                <TouchableOpacity 
+                  key={cat} 
+                  style={[styles.catChip, categoriaSeleccionada === cat && styles.catChipActive]}
+                  onPress={() => setCategoriaSeleccionada(cat)}
+                >
+                  <Text style={[styles.catChipText, categoriaSeleccionada === cat && styles.catChipActiveText]}>{cat}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.previewActions}>
+              <TouchableOpacity style={styles.btnDiscard} onPress={() => setCapturedImage(null)}>
+                <Text style={styles.btnTextDark}>Tomar Otra</Text>
               </TouchableOpacity>
-            ))}
+              <TouchableOpacity style={styles.btnPublish} onPress={publicarFoto} disabled={loading}>
+                {loading ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.btnText}>Publicar 🚀</Text>}
+              </TouchableOpacity>
+            </View>
           </View>
-
-          <View style={styles.previewActions}>
-            <TouchableOpacity style={styles.btnActionSecondary} onPress={guardarEnGaleria}>
-              <Ionicons name="download-outline" size={18} color={Colors.white} />
-              <Text style={styles.btnActionText}> Guardar</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.btnActionPrimary} onPress={publicarEnMuro} disabled={loading}>
-              {loading ? (
-                <ActivityIndicator color={Colors.white} />
-              ) : (
-                <>
-                  <Ionicons name="share-social" size={18} color={Colors.white} />
-                  <Text style={styles.btnActionText}> Publicar</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity style={styles.btnRetake} onPress={() => setPhotoUri(null)}>
-            <Text style={styles.btnRetakeText}>Tomar Otra Foto</Text>
-          </TouchableOpacity>
-        </View>
+        </ImageBackground>
       )}
     </View>
   );
@@ -145,30 +115,26 @@ export default function CameraScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.black },
-  containerCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  textInfo: { color: Colors.white, marginBottom: 15, textAlign: 'center' },
-  btn: { backgroundColor: Colors.primary, padding: 12, borderRadius: 8 },
-  btnText: { color: Colors.white, fontWeight: 'bold' },
-  frameContainer: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between', padding: 20 },
-  frameHeader: { backgroundColor: 'rgba(0,0,0,0.65)', padding: 10, borderRadius: 8, alignItems: 'center', marginTop: 10 },
-  frameTitle: { color: Colors.primary, fontWeight: 'bold', fontSize: 18, letterSpacing: 1.5 },
-  frameFooter: { backgroundColor: 'rgba(241,90,36,0.85)', padding: 10, borderRadius: 8, alignItems: 'center', marginBottom: 80 },
-  frameHashtag: { color: Colors.white, fontWeight: 'bold', fontSize: 15 },
-  actionContainer: { position: 'absolute', bottom: 25, left: 0, right: 0, alignItems: 'center' },
-  captureBtn: { width: 70, height: 70, borderRadius: 35, borderWidth: 4, borderColor: Colors.white, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.3)' },
-  innerCaptureBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: Colors.primary },
-  previewContainer: { flex: 1, backgroundColor: Colors.black, justifyContent: 'center', alignItems: 'center', padding: 15 },
-  previewImage: { width: '100%', height: '55%', borderRadius: 12, marginBottom: 10 },
-  labelCat: { color: Colors.white, fontSize: 12, fontWeight: 'bold', marginBottom: 6, alignSelf: 'flex-start' },
-  rowCats: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 15 },
-  chipCat: { flex: 1, padding: 8, borderWidth: 1, borderColor: '#555', borderRadius: 6, alignItems: 'center', marginHorizontal: 3, backgroundColor: '#222' },
-  chipCatActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  chipCatText: { color: Colors.white, fontSize: 11, fontWeight: 'bold' },
-  chipCatTextActive: { color: Colors.white },
-  previewActions: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 10 },
-  btnActionPrimary: { flex: 1, backgroundColor: Colors.primary, padding: 12, borderRadius: 8, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginLeft: 5 },
-  btnActionSecondary: { flex: 1, backgroundColor: '#333', padding: 12, borderRadius: 8, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginRight: 5 },
-  btnActionText: { color: Colors.white, fontWeight: 'bold', fontSize: 12 },
-  btnRetake: { marginTop: 5 },
-  btnRetakeText: { color: Colors.gray, fontSize: 13, textDecorationLine: 'underline' }
+  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  camera: { flex: 1 },
+  overlayFrame: { flex: 1, borderWidth: 20, borderColor: 'rgba(0,0,0,0.3)', justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 30 },
+  watermark: { backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 15, paddingVertical: 6, borderRadius: 20 },
+  watermarkText: { color: Colors.white, fontWeight: 'bold', fontSize: 12 },
+  buttonContainer: { position: 'absolute', bottom: 40, width: '100%', alignItems: 'center' },
+  captureBtn: { width: 75, height: 75, borderRadius: 38, borderWidth: 4, borderColor: Colors.white, justifyContent: 'center', alignItems: 'center' },
+  captureBtnInner: { width: 60, height: 60, borderRadius: 30, backgroundColor: Colors.primary },
+  preview: { flex: 1, width: '100%', justifyContent: 'flex-end' },
+  previewOverlay: { backgroundColor: 'rgba(0,0,0,0.85)', padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+  previewTitle: { color: Colors.white, fontWeight: 'bold', fontSize: 15, marginBottom: 12, textAlign: 'center' },
+  chipRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 },
+  catChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: '#333', borderWidth: 1, borderColor: '#555' },
+  catChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  catChipText: { color: Colors.gray, fontWeight: 'bold', fontSize: 12 },
+  catChipActiveText: { color: Colors.white },
+  previewActions: { flexDirection: 'row', justifyContent: 'space-between' },
+  btnDiscard: { flex: 1, backgroundColor: '#DDD', padding: 14, borderRadius: 8, alignItems: 'center', marginRight: 8 },
+  btnPublish: { flex: 1, backgroundColor: Colors.primary, padding: 14, borderRadius: 8, alignItems: 'center', marginLeft: 8 },
+  btnText: { color: Colors.white, fontWeight: 'bold', fontSize: 14 },
+  btnTextDark: { color: Colors.black, fontWeight: 'bold', fontSize: 14 },
+  btnPermiso: { backgroundColor: Colors.primary, padding: 12, borderRadius: 8 }
 });

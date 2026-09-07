@@ -1,0 +1,58 @@
+{/* Modal de Información de Versión Rediseñado v1.0.9 */}
+        <Modal visible={versionModalVisible} transparent animationType="slide">
+          <View style={styles.modalBg}>
+            <View style={styles.versionModalCard}>
+              <View style={styles.versionHeaderModal}>
+                <View style={styles.versionBadgeIcon}>
+                  <Ionicons name="information-circle" size={28} color={Colors.primary} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={styles.versionModalTitle}>Maratón Mijovi S.R.L.</Text>
+                  <Text style={styles.versionSubTitle}>Versión Estable v1.0.9</Text>
+                </View>
+                <TouchableOpacity onPress={() => setVersionModalVisible(false)} style={styles.closeIconBtn}>
+                  <Ionicons name="close" size={22} color={Colors.black} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.versionScrollBody} showsVerticalScrollIndicator={false}>
+                {/* TARJETA DE TIEMPO / FECHA DE ACTUALIZACIÓN */}
+                <View style={styles.fechaActualizacionBox}>
+                  <Ionicons name="time-outline" size={18} color={Colors.primary} style={{ marginRight: 6 }} />
+                  <Text style={styles.fechaActualizacionText}>Actualizado: 6 de Septiembre, 2026</Text>
+                </View>
+
+                <Text style={styles.changelogMainTitle}>📋 Historial de Mejoras:</Text>
+                
+                <View style={styles.changelogItemBox}>
+                  <Text style={styles.changelogVersion}>v1.0.9 (Actual)</Text>
+                  <Text style={styles.changelogText}>Incorporación de subida de certificado médico escaneado en formato PDF directamente desde el formulario de inscripción, y creación de tarjeta de ficha técnica detallada de cada corredor con opción de descarga de PDF y acreditación manual desde el panel de administración.</Text>
+                </View>
+
+                <View style={styles.changelogItemBox}>
+                  <Text style={styles.changelogVersion}>v1.0.8</Text>
+                  <Text style={styles.changelogText}>Formulario de inscripción ampliado (género, fecha de nacimiento, WhatsApp, emergencia y grupo sanguíneo) con opción avanzada para modificar distancia y talle de remera antes de la acreditación.</Text>
+                </View>
+
+                <View style={styles.changelogItemBox}>
+                  <Text style={styles.changelogVersion}>v1.0.7</Text>
+                  <Text style={styles.changelogText}>Incorporación de indicador de versión y fecha de actualización en vivo para control OTA instantáneo.</Text>
+                </View>
+
+                <View style={styles.changelogItemBox}>
+                  <Text style={styles.changelogVersion}>v1.0.6</Text>
+                  <Text style={styles.changelogText}>Sincronización de imágenes locales en circuitos y corrección de filtros en muro comunitario.</Text>
+                </View>
+
+                <View style={styles.changelogItemBox}>
+                  <Text style={styles.changelogVersion}>v1.0.5</Text>
+                  <Text style={styles.changelogText}>Control logístico de stock por talle, medallas y exportación directa de padrón en formato CSV.</Text>
+                </View>
+              </ScrollView>
+
+              <TouchableOpacity style={styles.btnVersionEntendido} onPress={() => setVersionModalVisible(false)}>
+                <Text style={styles.btnVersionEntendidoText}>Entendido</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>

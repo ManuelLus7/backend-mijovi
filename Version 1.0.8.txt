@@ -1,0 +1,29 @@
+<ScrollView style={styles.versionScrollBody} showsVerticalScrollIndicator={false}>
+                {/* TARJETA DE TIEMPO / FECHA DE ACTUALIZACIÓN */}
+                <View style={styles.fechaActualizacionBox}>
+                  <Ionicons name="time-outline" size={18} color={Colors.primary} style={{ marginRight: 6 }} />
+                  <Text style={styles.fechaActualizacionText}>Actualizado: 6 de Septiembre, 2026</Text>
+                </View>
+
+                <Text style={styles.changelogMainTitle}>📋 Historial de Mejoras:</Text>
+                
+                <View style={styles.changelogItemBox}>
+                  <Text style={styles.changelogVersion}>v1.0.8 (Actual)</Text>
+                  <Text style={styles.changelogText}>Formulario de inscripción ampliado (género, fecha de nacimiento, WhatsApp, emergencia, grupo sanguíneo y certificado médico) con opción avanzada para modificar distancia y talle de remera antes de la acreditación.</Text>
+                </View>
+
+                <View style={styles.changelogItemBox}>
+                  <Text style={styles.changelogVersion}>v1.0.7</Text>
+                  <Text style={styles.changelogText}>Incorporación de indicador de versión y fecha de actualización en vivo para control OTA instantáneo.</Text>
+                </View>
+
+                <View style={styles.changelogItemBox}>
+                  <Text style={styles.changelogVersion}>v1.0.6</Text>
+                  <Text style={styles.changelogText}>Sincronización de imágenes locales en circuitos y corrección de filtros en muro comunitario.</Text>
+                </View>
+
+                <View style={styles.changelogItemBox}>
+                  <Text style={styles.changelogVersion}>v1.0.5</Text>
+                  <Text style={styles.changelogText}>Control logístico de stock por talle, medallas y exportación directa de padrón en formato CSV.</Text>
+                </View>
+              </ScrollView>

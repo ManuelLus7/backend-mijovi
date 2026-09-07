@@ -12,15 +12,12 @@ const API_URL = 'https://backend-mijovi-production.up.railway.app';
 export default function CommunityFeedScreen({ isAdminMode }: { isAdminMode: boolean }) {
   const [tabActiva, setTabActiva] = useState<'oficiales' | 'participantes'>('oficiales');
   
-  // Muro Comunitario
   const [fotos, setFotos] = useState<any[]>([]);
   const [categoriaActiva, setCategoriaActiva] = useState('Todos');
   const categorias = ['Todos', 'Previas 🏃', 'Carrera 🏁', 'Medallas 🏅'];
 
-  // Google Fotos Oficiales
   const [albumesOficiales, setAlbumesOficiales] = useState<any[]>([]);
   const [selectedGoogleUrl, setSelectedGoogleUrl] = useState<string | null>(null);
-
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchFotos = async () => {
@@ -54,18 +51,15 @@ export default function CommunityFeedScreen({ isAdminMode }: { isAdminMode: bool
 
   const onRefresh = async () => {
     setRefreshing(true);
-    if (tabActiva === 'participantes') {
-      await fetchFotos();
-    } else {
-      await fetchAlbumesOficiales();
-    }
+    if (tabActiva === 'participantes') await fetchFotos();
+    else await fetchAlbumesOficiales();
     setRefreshing(false);
   };
 
   const eliminarFoto = async (id: number) => {
     Alert.alert(
       "Eliminar Publicación",
-      "¿Estás seguro de que deseas eliminar esta foto del muro?",
+      "¿Estás seguro de eliminar esta foto?",
       [
         { text: "Cancelar", style: "cancel" },
         { 
@@ -75,13 +69,11 @@ export default function CommunityFeedScreen({ isAdminMode }: { isAdminMode: bool
             try {
               const res = await fetch(`${API_URL}/api/fotos/${id}`, { method: 'DELETE' });
               if (res.ok) {
-                Alert.alert("Éxito", "Foto eliminada correctamente");
+                Alert.alert("Éxito", "Foto eliminada");
                 fetchFotos();
-              } else {
-                Alert.alert("Error", "No se pudo eliminar la foto");
               }
             } catch (e) {
-              Alert.alert("Error", "Error de conexión con el servidor");
+              Alert.alert("Error", "No se pudo eliminar");
             }
           }
         }
@@ -91,16 +83,13 @@ export default function CommunityFeedScreen({ isAdminMode }: { isAdminMode: bool
 
   return (
     <View style={styles.container}>
-      {/* PESTAÑAS DUALES */}
       <View style={styles.segmentContainer}>
         <TouchableOpacity 
           style={[styles.segmentBtn, tabActiva === 'oficiales' && styles.segmentBtnActive]}
           onPress={() => setTabActiva('oficiales')}
         >
           <Ionicons name="images" size={16} color={tabActiva === 'oficiales' ? Colors.white : Colors.black} />
-          <Text style={[styles.segmentText, tabActiva === 'oficiales' && styles.segmentTextActive]}>
-            Álbumes Oficiales HD
-          </Text>
+          <Text style={[styles.segmentText, tabActiva === 'oficiales' && styles.segmentTextActive]}>Álbumes Oficiales HD</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
@@ -108,13 +97,10 @@ export default function CommunityFeedScreen({ isAdminMode }: { isAdminMode: bool
           onPress={() => setTabActiva('participantes')}
         >
           <Ionicons name="people" size={16} color={tabActiva === 'participantes' ? Colors.white : Colors.black} />
-          <Text style={[styles.segmentText, tabActiva === 'participantes' && styles.segmentTextActive]}>
-            Muro Corredores
-          </Text>
+          <Text style={[styles.segmentText, tabActiva === 'participantes' && styles.segmentTextActive]}>Muro Corredores</Text>
         </TouchableOpacity>
       </View>
 
-      {/* ÁLBUMES OFICIALES (GOOGLE PHOTOS INTEGRATION) */}
       {tabActiva === 'oficiales' && (
         <FlatList
           data={albumesOficiales}
@@ -127,37 +113,16 @@ export default function CommunityFeedScreen({ isAdminMode }: { isAdminMode: bool
                 <Text style={styles.officialTag}>FOTOS OFICIALES • {item.fecha_evento}</Text>
                 <Text style={styles.officialTitle}>{item.titulo}</Text>
                 <Text style={styles.officialSub}>{item.subtitulo}</Text>
-                
-                <View style={styles.officialActions}>
-                  <TouchableOpacity 
-                    style={styles.btnOpenInApp}
-                    onPress={() => setSelectedGoogleUrl(item.google_photos_url)}
-                  >
-                    <Ionicons name="eye" size={16} color={Colors.white} />
-                    <Text style={styles.btnTextWhite}> Ver en la App</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity 
-                    style={styles.btnOpenExternal}
-                    onPress={() => Linking.openURL(item.google_photos_url)}
-                  >
-                    <Ionicons name="logo-google" size={16} color={Colors.black} />
-                    <Text style={styles.btnTextBlack}> Abrir Google Fotos</Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity style={styles.btnOpenInApp} onPress={() => setSelectedGoogleUrl(item.google_photos_url)}>
+                  <Ionicons name="eye" size={16} color={Colors.white} />
+                  <Text style={styles.btnTextWhite}> Ver en la App</Text>
+                </TouchableOpacity>
               </View>
             </View>
           )}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="cloud-offline" size={40} color={Colors.gray} />
-              <Text style={styles.emptyText}>No hay álbumes oficiales cargados aún.</Text>
-            </View>
-          }
         />
       )}
 
-      {/* MURO PARTICIPANTES */}
       {tabActiva === 'participantes' && (
         <View style={{ flex: 1 }}>
           <View style={styles.albumBar}>
@@ -171,9 +136,7 @@ export default function CommunityFeedScreen({ isAdminMode }: { isAdminMode: bool
                   style={[styles.albumChip, categoriaActiva === item && styles.albumChipActive]}
                   onPress={() => setCategoriaActiva(item)}
                 >
-                  <Text style={[styles.albumChipText, categoriaActiva === item && styles.albumChipTextActive]}>
-                    {item}
-                  </Text>
+                  <Text style={[styles.albumChipText, categoriaActiva === item && styles.albumChipTextActive]}>{item}</Text>
                 </TouchableOpacity>
               )}
             />
@@ -202,32 +165,24 @@ export default function CommunityFeedScreen({ isAdminMode }: { isAdminMode: bool
             )}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>Sé el primero en subir tu foto en {categoriaActiva} 📸</Text>
+                <Text style={styles.emptyText}>No hay fotos en {categoriaActiva} 📸</Text>
               </View>
             }
           />
         </View>
       )}
 
-      {/* MODAL WEBVIEW GOOGLE PHOTOS */}
       <Modal visible={!!selectedGoogleUrl} animationType="slide" onRequestClose={() => setSelectedGoogleUrl(null)}>
         <View style={{ flex: 1, backgroundColor: Colors.black }}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalHeaderTitle}>Galería Oficial de Fotos</Text>
-            <TouchableOpacity onPress={() => setSelectedGoogleUrl(null)} style={styles.btnCloseModal}>
+            <Text style={styles.modalHeaderTitle}>Galería Oficial</Text>
+            <TouchableOpacity onPress={() => setSelectedGoogleUrl(null)}>
               <Ionicons name="close-circle" size={28} color={Colors.white} />
             </TouchableOpacity>
           </View>
-          {selectedGoogleUrl && (
-            <WebView 
-              source={{ uri: selectedGoogleUrl }} 
-              startInLoadingState 
-              renderLoading={() => <ActivityIndicator color={Colors.primary} size="large" style={StyleSheet.absoluteFillObject} />}
-            />
-          )}
+          {selectedGoogleUrl && <WebView source={{ uri: selectedGoogleUrl }} />}
         </View>
       </Modal>
-
     </View>
   );
 }
@@ -239,17 +194,14 @@ const styles = StyleSheet.create({
   segmentBtnActive: { backgroundColor: Colors.primary },
   segmentText: { fontWeight: 'bold', fontSize: 12, color: Colors.black, marginLeft: 6 },
   segmentTextActive: { color: Colors.white },
-  officialCard: { backgroundColor: Colors.white, marginHorizontal: 12, marginVertical: 8, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#DDD' },
-  officialCover: { width: '100%', height: 180, resizeMode: 'cover' },
+  officialCard: { backgroundColor: Colors.white, marginHorizontal: 12, marginVertical: 8, borderRadius: 12, overflow: 'hidden' },
+  officialCover: { width: '100%', height: 160 },
   officialCardBody: { padding: 14 },
   officialTag: { color: Colors.primary, fontWeight: 'bold', fontSize: 10, marginBottom: 4 },
   officialTitle: { fontSize: 16, fontWeight: 'bold', color: Colors.black, marginBottom: 4 },
-  officialSub: { fontSize: 12, color: Colors.gray, marginBottom: 12 },
-  officialActions: { flexDirection: 'row', justifyContent: 'space-between' },
-  btnOpenInApp: { flex: 1, backgroundColor: Colors.black, flexDirection: 'row', padding: 10, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: 4 },
-  btnOpenExternal: { flex: 1, backgroundColor: '#EFEFEF', flexDirection: 'row', padding: 10, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginLeft: 4, borderWidth: 1, borderColor: '#CCC' },
+  officialSub: { fontSize: 12, color: Colors.gray, marginBottom: 10 },
+  btnOpenInApp: { backgroundColor: Colors.black, flexDirection: 'row', padding: 10, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   btnTextWhite: { color: Colors.white, fontWeight: 'bold', fontSize: 11 },
-  btnTextBlack: { color: Colors.black, fontWeight: 'bold', fontSize: 11 },
   albumBar: { backgroundColor: Colors.black, paddingVertical: 8, paddingHorizontal: 5 },
   albumChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: '#222', marginHorizontal: 4 },
   albumChipActive: { backgroundColor: Colors.primary },
@@ -257,14 +209,13 @@ const styles = StyleSheet.create({
   albumChipTextActive: { color: Colors.white },
   card: { backgroundColor: Colors.white, marginHorizontal: 10, marginVertical: 8, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#EEE' },
   postHeader: { padding: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
-  image: { width: '100%', height: 280, resizeMode: 'cover' },
+  image: { width: '100%', height: 260, resizeMode: 'cover' },
   footer: { padding: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   user: { fontWeight: 'bold', fontSize: 13, color: Colors.black },
   date: { color: Colors.primary, fontSize: 11, fontWeight: 'bold' },
   maratonText: { color: Colors.gray, fontSize: 11 },
-  emptyContainer: { padding: 40, alignItems: 'center', justifyContent: 'center' },
-  emptyText: { color: Colors.gray, textAlign: 'center', fontSize: 13, marginTop: 10 },
+  emptyContainer: { padding: 40, alignItems: 'center' },
+  emptyText: { color: Colors.gray, fontSize: 13 },
   modalHeader: { height: 50, backgroundColor: Colors.black, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 15 },
-  modalHeaderTitle: { color: Colors.white, fontWeight: 'bold', fontSize: 16 },
-  btnCloseModal: { padding: 4 }
+  modalHeaderTitle: { color: Colors.white, fontWeight: 'bold', fontSize: 16 }
 });

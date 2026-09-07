@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import SplashScreen from './src/SplashScreen';
 import CameraScreen from './src/CameraScreen';
 import AdminScannerScreen from './src/AdminScannerScreen';
 import CommunityFeedScreen from './src/CommunityFeedScreen';
@@ -16,8 +17,10 @@ const INSTAGRAM_PROFILE_URL = 'https://www.instagram.com/maratonmijovi/?hl=es';
 const INSTAGRAM_HIGHLIGHTS_URL = 'https://www.instagram.com/stories/highlights/17941850090997104/?hl=es';
 
 export default function App() {
+  const [isLoading, setIsLoading] = useState(true);
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [versionModalVisible, setVersionModalVisible] = useState(false);
   const [inputPin, setInputPin] = useState('');
 
   const [showCameraInCommunity, setShowCameraInCommunity] = useState(false);
@@ -32,6 +35,12 @@ export default function App() {
   const [nombre, setNombre] = useState('');
   const [dni, setDni] = useState('');
   const [email, setEmail] = useState('');
+  const [genero, setGenero] = useState('Masculino');
+  const [fechaNac, setFechaNac] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
+  const [telEmergencia, setTelEmergencia] = useState('');
+  const [grupoSanguineo, setGrupoSanguineo] = useState('O+');
+  const [certificadoUrl, setCertificadoUrl] = useState('');
   const [distancia, setDistancia] = useState('10K');
   const [talle, setTalle] = useState('L');
 
@@ -117,17 +126,31 @@ export default function App() {
   };
 
   const handleRegistro = async () => {
-    if (!nombre || !dni || !email) return Alert.alert('Atención', 'Completa todos los campos');
+    if (!nombre || !dni || !email || !whatsapp || !telEmergencia || !fechaNac) {
+      return Alert.alert('Atención', 'Por favor completa todos los campos obligatorios');
+    }
     try {
       const res = await fetch(`${API_URL}/api/registro`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre_completo: nombre, dni, email, distancia, talle_remera: talle })
+        body: JSON.stringify({
+          nombre_completo: nombre,
+          dni,
+          email,
+          genero,
+          fecha_nacimiento: fechaNac,
+          whatsapp,
+          telefono_emergencia: telEmergencia,
+          grupo_sanguineo: grupoSanguineo,
+          certificado_medico_url: certificadoUrl,
+          distancia,
+          talle_remera: talle
+        })
       });
       const data = await res.json();
       if (res.ok) {
         Alert.alert('¡Inscripción Confirmada!', `Código QR: ${data.qr_code}`);
-        setNombre(''); setDni(''); setEmail('');
+        setNombre(''); setDni(''); setEmail(''); setWhatsapp(''); setTelEmergencia(''); setFechaNac(''); setCertificadoUrl('');
         fetchKpis();
         setUserTab('pase');
       } else {
@@ -145,25 +168,40 @@ export default function App() {
     c.dni.includes(busqueda)
   );
 
+  if (isLoading) {
+    return <SplashScreen onFinish={() => setIsLoading(false)} />;
+  }
+
   return (
     <SafeAreaProvider>
       <StatusBar barStyle="light-content" backgroundColor={Colors.black} />
       <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
         
-        {/* Header Superior con Logo Oficial */}
+        {/* Header Superior con Logo Oficial y Botón de Versión */}
         <View style={styles.header}>
           <View style={styles.headerBrand}>
             <View style={styles.logoBadge}><Text style={styles.logoBadgeText}>M</Text></View>
             <Text style={styles.headerTitle}>{isAdminMode ? 'STAFF / ADMIN' : 'MARATÓN MIJOVI'}</Text>
           </View>
 
-          <TouchableOpacity 
-            style={[styles.roleBtn, isAdminMode && { backgroundColor: Colors.primary }]} 
-            onPress={() => isAdminMode ? setIsAdminMode(false) : setPinModalVisible(true)}
-          >
-            <Ionicons name={isAdminMode ? "exit" : "lock-closed"} size={16} color={Colors.white} />
-            <Text style={styles.roleBtnText}>{isAdminMode ? ' Salir Admin' : ' Staff'}</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {isAdminMode && (
+              <TouchableOpacity 
+                style={styles.infoVersionBtn} 
+                onPress={() => setVersionModalVisible(true)}
+              >
+                <Ionicons name="information" size={18} color={Colors.white} />
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity 
+              style={[styles.roleBtn, isAdminMode && { backgroundColor: Colors.primary }]} 
+              onPress={() => isAdminMode ? setIsAdminMode(false) : setPinModalVisible(true)}
+            >
+              <Ionicons name={isAdminMode ? "exit" : "lock-closed"} size={16} color={Colors.white} />
+              <Text style={styles.roleBtnText}>{isAdminMode ? ' Salir Admin' : ' Staff'}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Modal PIN Admin */}
@@ -188,6 +226,70 @@ export default function App() {
                   <Text style={styles.btnModalText}>Ingresar</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Modal de Información y Registro de Versiones (Changelog v1.1.0) */}
+        <Modal visible={versionModalVisible} transparent animationType="slide">
+          <View style={styles.modalBg}>
+            <View style={styles.versionModalCard}>
+              <View style={styles.versionHeaderModal}>
+                <View style={styles.versionBadgeIcon}>
+                  <Ionicons name="information-circle" size={28} color={Colors.primary} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text style={styles.versionModalTitle}>Maratón Mijovi S.R.L.</Text>
+                  <Text style={styles.versionSubTitle}>Versión Estable v1.1.0</Text>
+                </View>
+                <TouchableOpacity onPress={() => setVersionModalVisible(false)} style={styles.closeIconBtn}>
+                  <Ionicons name="close" size={22} color={Colors.black} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.versionScrollBody} showsVerticalScrollIndicator={false}>
+                {/* TARJETA DE PERFIL PROFESIONAL DEL DESARROLLADOR */}
+                <View style={styles.devProfileBoxModal}>
+                  <Ionicons name="briefcase" size={24} color={Colors.primary} style={{ marginBottom: 6 }} />
+                  <Text style={styles.devProfileTitle}>Desarrollado por Manuel Lus</Text>
+                  <Text style={styles.devProfileSub}>Desarrollador de Aplicaciones Móviles & Sistemas Escalables</Text>
+                  <Text style={styles.devProfileDesc}>Soluciones tecnológicas de alto rendimiento para eventos corporativos y gestión en tiempo real.</Text>
+                  
+                  <TouchableOpacity 
+                    style={styles.btnContactarModal} 
+                    onPress={() => Linking.openURL('https://wa.me/5493854935947?text=Hola%20Manuel,%20vi%20tu%20sistema%20en%20la%20Maratón%20Mijovi%20y%20necesito%20desarrollar%20una%20app.')}
+                  >
+                    <Ionicons name="logo-whatsapp" size={16} color={Colors.white} style={{ marginRight: 6 }} />
+                    <Text style={styles.btnContactarText}>💬 Contactar al Dev: 385 493 5947</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.fechaActualizacionBox}>
+                  <Ionicons name="time-outline" size={16} color={Colors.primary} style={{ marginRight: 6 }} />
+                  <Text style={styles.fechaActualizacionText}>Actualizado: Septiembre 2026</Text>
+                </View>
+
+                <Text style={styles.changelogMainTitle}>📋 Historial de Versiones (Changelog):</Text>
+                
+                <View style={styles.changelogItemBox}>
+                  <Text style={styles.changelogVersion}>v1.1.0 (Versión Actual)</Text>
+                  <Text style={styles.changelogText}>Implementación de Pantalla de Bienvenida (Splash Screen) con barra de progreso animada de 5 segundos y tarjeta comercial del desarrollador.</Text>
+                </View>
+
+                <View style={styles.changelogItemBox}>
+                  <Text style={styles.changelogVersion}>v1.0.9</Text>
+                  <Text style={styles.changelogText}>Adjunto de certificado médico en formato PDF, ficha médica ampliada y panel de control de inventario de remeras para el Staff.</Text>
+                </View>
+
+                <View style={styles.changelogItemBox}>
+                  <Text style={styles.changelogVersion}>v1.0.8</Text>
+                  <Text style={styles.changelogText}>Módulo de perfil del corredor con código QR, validación estricta anti-doble acreditación y edición de categoría.</Text>
+                </View>
+              </ScrollView>
+
+              <TouchableOpacity style={styles.btnVersionEntendido} onPress={() => setVersionModalVisible(false)}>
+                <Text style={styles.btnVersionEntendidoText}>Cerrar</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
@@ -304,7 +406,7 @@ export default function App() {
                         </View>
                       </View>
 
-                      {/* TESTIMONIOS Y OPINIONES DE ATLETAS */}
+                      {/* TESTIMONIOS Y OPINIONES DE ATLETAS (5 RESEÑAS) */}
                       <Text style={styles.sectionHeader}>Experiencia de los Atletas 💬</Text>
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 15 }}>
                         <View style={styles.testimonialCardScroll}>
@@ -345,6 +447,32 @@ export default function App() {
                             "Corrí mi primera maratón en familia. El trazado de 5K es muy cómodo y seguro para disfrutar corriendo."
                           </Text>
                         </View>
+
+                        <View style={styles.testimonialCardScroll}>
+                          <View style={styles.rowAlign}>
+                            <Ionicons name="person-circle" size={32} color={Colors.primary} />
+                            <View style={{ marginLeft: 8 }}>
+                              <Text style={styles.testimonialUser}>Carolina Rossi</Text>
+                              <Text style={styles.testimonialDist}>Atleta 21K | ⭐⭐⭐⭐⭐</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.testimonialText}>
+                            "Muy buena señalización en cada kilómetro y los fotógrafos capturan unos momentos increíbles. ¡Lista para 2027!"
+                          </Text>
+                        </View>
+
+                        <View style={styles.testimonialCardScroll}>
+                          <View style={styles.rowAlign}>
+                            <Ionicons name="person-circle" size={32} color="#6C757D" />
+                            <View style={{ marginLeft: 8 }}>
+                              <Text style={styles.testimonialUser}>Esteban Morales</Text>
+                              <Text style={styles.testimonialDist}>Atleta 10K | ⭐⭐⭐⭐⭐</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.testimonialText}>
+                            "Me cambió la categoría a 10K directamente desde la app en Mi Pase sin ningún problema. App 10/10."
+                          </Text>
+                        </View>
                       </ScrollView>
 
                       {/* PREGUNTAS FRECUENTES (FAQ) */}
@@ -370,29 +498,76 @@ export default function App() {
                   {eventoSection === 'registro' && (
                     <View>
                       <Text style={styles.sectionHeader}>Inscripción - Abril 2027</Text>
+                      
                       <TextInput 
                         style={styles.input} 
                         placeholder="Nombre Completo" 
-                        placeholderTextColor="#888888" 
+                        placeholderTextColor="#888" 
                         value={nombre} 
                         onChangeText={setNombre} 
                       />
+                      
                       <TextInput 
                         style={styles.input} 
                         placeholder="DNI (sin puntos)" 
-                        placeholderTextColor="#888888" 
+                        placeholderTextColor="#888" 
                         keyboardType="numeric" 
                         value={dni} 
                         onChangeText={setDni} 
                       />
+                      
                       <TextInput 
                         style={styles.input} 
                         placeholder="Correo Electrónico" 
-                        placeholderTextColor="#888888" 
+                        placeholderTextColor="#888" 
                         keyboardType="email-address" 
                         value={email} 
                         onChangeText={setEmail} 
                       />
+
+                      <TextInput 
+                        style={styles.input} 
+                        placeholder="Fecha de Nacimiento (DD/MM/AAAA)" 
+                        placeholderTextColor="#888" 
+                        value={fechaNac} 
+                        onChangeText={setFechaNac} 
+                      />
+
+                      <TextInput 
+                        style={styles.input} 
+                        placeholder="Número de WhatsApp (Notificaciones)" 
+                        placeholderTextColor="#888" 
+                        keyboardType="phone-pad" 
+                        value={whatsapp} 
+                        onChangeText={setWhatsapp} 
+                      />
+
+                      <TextInput 
+                        style={styles.input} 
+                        placeholder="Teléfono de Emergencia" 
+                        placeholderTextColor="#888" 
+                        keyboardType="phone-pad" 
+                        value={telEmergencia} 
+                        onChangeText={setTelEmergencia} 
+                      />
+
+                      <Text style={styles.label}>Género:</Text>
+                      <View style={styles.row}>
+                        {['Masculino', 'Femenino', 'Otro'].map((g) => (
+                          <TouchableOpacity key={g} style={[styles.chip, genero === g && styles.chipActive]} onPress={() => setGenero(g)}>
+                            <Text style={[styles.chipText, genero === g && styles.chipTextActive]}>{g}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+
+                      <Text style={styles.label}>Grupo Sanguíneo:</Text>
+                      <View style={styles.row}>
+                        {['O+', 'O-', 'A+', 'B+'].map((gs) => (
+                          <TouchableOpacity key={gs} style={[styles.chip, grupoSanguineo === gs && styles.chipActive]} onPress={() => setGrupoSanguineo(gs)}>
+                            <Text style={[styles.chipText, grupoSanguineo === gs && styles.chipTextActive]}>{gs}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
                       
                       <Text style={styles.label}>Distancia:</Text>
                       <View style={styles.row}>
@@ -412,13 +587,21 @@ export default function App() {
                         ))}
                       </View>
 
+                      <TextInput 
+                        style={styles.input} 
+                        placeholder="URL del Certificado Médico (Opcional)" 
+                        placeholderTextColor="#888" 
+                        value={certificadoUrl} 
+                        onChangeText={setCertificadoUrl} 
+                      />
+
                       <TouchableOpacity style={styles.actionBtnPrimary} onPress={handleRegistro}>
                         <Text style={styles.actionBtnText}>Confirmar e Inscribirme 🚀</Text>
                       </TouchableOpacity>
                     </View>
                   )}
 
-                  {/* SECCIÓN CIRCUITOS */}
+                  {/* SECCIÓN CIRCUITOS ENRIQUECIDOS */}
                   {eventoSection === 'info' && (
                     <View>
                       <Text style={styles.sectionHeader}>Circuitos Oficiales - Abril 2027</Text>
@@ -431,14 +614,15 @@ export default function App() {
                             <Text style={styles.circuitBadge}>Largada 08:30 HS</Text>
                           </View>
                           <Text style={styles.circuitDesc}>Trazado recreativo, totalmente plano y seguro sobre la avenida principal. Ideal para familias, principiantes o caminantes.</Text>
+
                           <View style={styles.techDataGrid}>
                             <View style={styles.techDataItem}>
                               <Ionicons name="trending-up" size={14} color={Colors.primary} />
-                              <Text style={styles.techDataText}> Altimetría: +15m (Plano)</Text>
+                              <Text style={styles.techDataText}>Altimetría: +15m (Plano)</Text>
                             </View>
                             <View style={styles.techDataItem}>
                               <Ionicons name="water" size={14} color={Colors.primary} />
-                              <Text style={styles.techDataText}> Hidratación: KM 2.5 y Meta</Text>
+                              <Text style={styles.techDataText}>Hidratación: KM 2.5 y Meta</Text>
                             </View>
                           </View>
                           <Text style={styles.instaLinkCircuitText}>Ver fotos del recorrido en Instagram →</Text>
@@ -453,14 +637,15 @@ export default function App() {
                             <Text style={styles.circuitBadge}>Largada 08:00 HS</Text>
                           </View>
                           <Text style={styles.circuitDesc}>Recorrido homologado con retornos señalizados y medición por chip. Asfalto rápido para mejorar marca personal.</Text>
+
                           <View style={styles.techDataGrid}>
                             <View style={styles.techDataItem}>
                               <Ionicons name="trending-up" size={14} color={Colors.primary} />
-                              <Text style={styles.techDataText}> Altimetría: +45m</Text>
+                              <Text style={styles.techDataText}>Altimetría: +45m</Text>
                             </View>
                             <View style={styles.techDataItem}>
                               <Ionicons name="water" size={14} color={Colors.primary} />
-                              <Text style={styles.techDataText}> Hidratación: KM 2.5, 5, 7.5 y Meta</Text>
+                              <Text style={styles.techDataText}>Hidratación: KM 2.5, 5, 7.5 y Meta</Text>
                             </View>
                           </View>
                           <Text style={styles.instaLinkCircuitText}>Ver fotos del recorrido en Instagram →</Text>
@@ -475,14 +660,15 @@ export default function App() {
                             <Text style={styles.circuitBadge}>Largada 07:30 HS</Text>
                           </View>
                           <Text style={styles.circuitDesc}>Desafío principal del evento. Recorrido panorámico con paso por el centro histórico, parque central y zonas de animación.</Text>
+
                           <View style={styles.techDataGrid}>
                             <View style={styles.techDataItem}>
                               <Ionicons name="trending-up" size={14} color={Colors.primary} />
-                              <Text style={styles.techDataText}> Altimetría: +110m (Moderado)</Text>
+                              <Text style={styles.techDataText}>Altimetría: +110m (Moderado)</Text>
                             </View>
                             <View style={styles.techDataItem}>
                               <Ionicons name="water" size={14} color={Colors.primary} />
-                              <Text style={styles.techDataText}> Puestos cada 2.5 KM + Isotónicas</Text>
+                              <Text style={styles.techDataText}>Puestos cada 2.5 KM + Isotónicas</Text>
                             </View>
                           </View>
                           <Text style={styles.instaLinkCircuitText}>Ver fotos del recorrido en Instagram →</Text>
@@ -511,7 +697,8 @@ export default function App() {
                           <Text style={styles.actionBtnText}>Sacar Foto con Marco Oficial 📸</Text>
                         </TouchableOpacity>
                       </View>
-                      <CommunityFeedScreen />
+                      
+                      <CommunityFeedScreen isAdminMode={isAdminMode} />
                     </>
                   ) : (
                     <View style={{ flex: 1 }}>
@@ -709,7 +896,7 @@ const styles = StyleSheet.create({
   circuitDesc: { color: Colors.gray, fontSize: 12, marginTop: 6, marginBottom: 10 },
   techDataGrid: { backgroundColor: Colors.background, padding: 10, borderRadius: 8 },
   techDataItem: { flexDirection: 'row', alignItems: 'center', marginVertical: 2 },
-  techDataText: { fontSize: 11, color: Colors.black, fontWeight: 'bold' },
+  techDataText: { fontSize: 11, color: Colors.black, fontWeight: 'bold', marginLeft: 6 },
   instaLinkCircuitText: { color: '#E1306C', fontWeight: 'bold', fontSize: 11, marginTop: 10, textAlign: 'right' },
   btnInstaStoryLink: { backgroundColor: '#E1306C', flexDirection: 'row', padding: 14, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginTop: 5 },
   faqItem: { backgroundColor: Colors.white, padding: 14, borderRadius: 8, marginBottom: 8 },
@@ -773,5 +960,71 @@ const styles = StyleSheet.create({
     marginBottom: 15 
   },
   btnModal: { flex: 1, padding: 12, borderRadius: 8, alignItems: 'center', marginHorizontal: 5 },
-  btnModalText: { color: Colors.white, fontWeight: 'bold' }
+  btnModalText: { color: Colors.white, fontWeight: 'bold' },
+  infoVersionBtn: {
+    backgroundColor: '#333333',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#444'
+  },
+  versionModalCard: { 
+    backgroundColor: Colors.white, 
+    padding: 20, 
+    borderRadius: 16, 
+    width: '90%', 
+    maxHeight: '80%', 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 4 }, 
+    shadowOpacity: 0.3, 
+    shadowRadius: 5, 
+    elevation: 8 
+  },
+  versionHeaderModal: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: 15, 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#EEE', 
+    paddingBottom: 12 
+  },
+  versionBadgeIcon: { width: 45, height: 45, borderRadius: 22.5, backgroundColor: '#FFF0EC', justifyContent: 'center', alignItems: 'center' },
+  versionModalTitle: { fontSize: 16, fontWeight: 'bold', color: Colors.black },
+  versionSubTitle: { fontSize: 12, color: Colors.primary, fontWeight: 'bold' },
+  closeIconBtn: { padding: 4 },
+  versionScrollBody: { maxHeight: 280, marginBottom: 15 },
+  devProfileBoxModal: {
+    backgroundColor: '#F8F9FA',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center'
+  },
+  devProfileTitle: { fontWeight: 'bold', fontSize: 15, color: Colors.black, marginBottom: 2 },
+  devProfileSub: { fontSize: 12, fontWeight: 'bold', color: Colors.primary, marginBottom: 8, textAlign: 'center' },
+  devProfileDesc: { fontSize: 11, color: Colors.gray, textAlign: 'center', lineHeight: 16 },
+  btnContactarModal: {
+    backgroundColor: '#25D366',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 10
+  },
+  btnContactarText: { color: Colors.white, fontWeight: 'bold', fontSize: 12 },
+  fechaActualizacionBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EDF2F7', padding: 10, borderRadius: 8, marginBottom: 15 },
+  fechaActualizacionText: { fontSize: 12, fontWeight: 'bold', color: Colors.black },
+  changelogMainTitle: { fontWeight: 'bold', fontSize: 14, color: Colors.black, marginBottom: 10 },
+  changelogItemBox: { backgroundColor: '#F8F9FA', padding: 12, borderRadius: 8, marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0' },
+  changelogVersion: { fontWeight: 'bold', fontSize: 12, color: Colors.primary, marginBottom: 2 },
+  changelogText: { fontSize: 11, color: Colors.gray, lineHeight: 16 },
+  btnVersionEntendido: { backgroundColor: Colors.black, padding: 14, borderRadius: 10, alignItems: 'center', marginTop: 10 },
+  btnVersionEntendidoText: { color: Colors.white, fontWeight: 'bold', fontSize: 13 }
 });

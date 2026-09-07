@@ -3,6 +3,8 @@ import { StyleSheet, Text, View, TouchableOpacity, Alert, ActivityIndicator } fr
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Colors } from '../colors';
 
+const API_URL = 'https://backend-mijovi-production.up.railway.app';
+
 interface AdminScannerProps {
   onAcreditadoSuccess?: () => void;
 }
@@ -30,7 +32,7 @@ export default function AdminScannerScreen({ onAcreditadoSuccess }: AdminScanner
     setLoading(true);
 
     try {
-      const response = await fetch('https://api-maraton-mijovi.onrender.com/api/admin/acreditar', {
+      const response = await fetch(`${API_URL}/api/admin/acreditar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ qr_code: data })
@@ -42,7 +44,6 @@ export default function AdminScannerScreen({ onAcreditadoSuccess }: AdminScanner
         setLastCorredor(resData.corredor);
         Alert.alert('✅ ¡Acreditado!', `Corredor: ${resData.corredor.nombre}\nDistancia: ${resData.corredor.distancia}\nTalle: ${resData.corredor.talle}`);
         
-        // Notificar a App.tsx para refrescar datos de inmediato
         if (onAcreditadoSuccess) {
           onAcreditadoSuccess();
         }
