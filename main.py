@@ -3,9 +3,12 @@ import csv
 import datetime
 from io import StringIO
 from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, UploadFile, File, Form
+<<<<<<< HEAD
 from fastapi.responses import StreamingResponse, FileResponse
+=======
+from fastapi.responses import StreamingResponse
+>>>>>>> 80b3d4c (Actualización completa del backend con exportación CSV y stock de remeras)
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, EmailStr
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from dotenv import load_dotenv
 
@@ -41,6 +44,7 @@ def get_db():
         db.close()
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 class RegistroCorredor(BaseModel):
     nombre_completo: str
@@ -69,6 +73,8 @@ class CambiarDatosRequest(BaseModel):
     nueva_distancia: str = None
     nuevo_talle: str = None
 
+=======
+>>>>>>> 80b3d4c (Actualización completa del backend con exportación CSV y stock de remeras)
 async def enviar_correo_confirmacion(email_destino: str, nombre: str, dni: str, distancia: str, qr_code: str, talle: str):
     qr_image_url = f"https://quickchart.io/qr?text={qr_code}&size=200"
     html_content = f"""
@@ -110,7 +116,11 @@ async def registrar_corredor(
     background_tasks: BackgroundTasks,
     nombre_completo: str = Form(...),
     dni: str = Form(...),
+<<<<<<< HEAD
     email: EmailStr = Form(...),
+=======
+    email: str = Form(...),
+>>>>>>> 80b3d4c (Actualización completa del backend con exportación CSV y stock de remeras)
     genero: str = Form(...),
     fecha_nacimiento: str = Form(...),
     whatsapp: str = Form(...),
@@ -126,6 +136,7 @@ async def registrar_corredor(
     if db.query(models.Usuario).filter(models.Usuario.email == email).first():
         raise HTTPException(status_code=400, detail="El correo electrónico ya se encuentra registrado.")
     
+<<<<<<< HEAD
     pdf_path = None
     if certificado_pdf:
         file_ext = certificado_pdf.filename.split(".")[-1]
@@ -137,6 +148,14 @@ async def registrar_corredor(
     qr_generado = f"MIJOVI-{dni}-{distancia}"
     nuevo_usuario = models.Usuario(
 <<<<<<< HEAD
+=======
+    pdf_url = None
+    if certificado_pdf:
+        pdf_url = f"certificados/{dni}_{certificado_pdf.filename}"
+
+    qr_generado = f"MIJOVI-{dni}-{distancia}"
+    nuevo_usuario = models.Usuario(
+>>>>>>> 80b3d4c (Actualización completa del backend con exportación CSV y stock de remeras)
         nombre_completo=nombre_completo,
         dni=dni,
         email=email,
@@ -145,6 +164,7 @@ async def registrar_corredor(
         whatsapp=whatsapp,
         telefono_emergencia=telefono_emergencia,
         grupo_sanguineo=grupo_sanguineo,
+<<<<<<< HEAD
         certificado_medico_url=pdf_path,
         distancia=distancia,
         talle_remera=talle_remera,
@@ -161,6 +181,11 @@ async def registrar_corredor(
         distancia=corredor.distancia,
         talle_remera=corredor.talle_remera,
 >>>>>>> 57a0cff (Sincronización de stock de remeras y exportación CSV)
+=======
+        certificado_medico_url=pdf_url,
+        distancia=distancia,
+        talle_remera=talle_remera,
+>>>>>>> 80b3d4c (Actualización completa del backend con exportación CSV y stock de remeras)
         qr_code=qr_generado,
         acreditado=False
     )
@@ -186,6 +211,7 @@ def buscar_inscripcion(dni: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Inscripción no encontrada para este DNI.")
     return corredor
 
+<<<<<<< HEAD
 @app.put("/api/corredor/cambiar-datos")
 def cambiar_datos_corredor(payload: CambiarDatosRequest, db: Session = Depends(get_db)):
     corredor = db.query(models.Usuario).filter(models.Usuario.dni == payload.dni).first()
@@ -215,9 +241,12 @@ def descargar_certificado(dni: str, db: Session = Depends(get_db)):
 =======
 >>>>>>> 57a0cff (Sincronización de stock de remeras y exportación CSV)
 
+=======
+>>>>>>> 80b3d4c (Actualización completa del backend con exportación CSV y stock de remeras)
 @app.post("/api/admin/acreditar")
-def acreditar_corredor(payload: ValidarQRRequest, db: Session = Depends(get_db)):
-    corredor = db.query(models.Usuario).filter(models.Usuario.qr_code == payload.qr_code).first()
+def acreditar_corredor(payload: dict, db: Session = Depends(get_db)):
+    qr_code = payload.get("qr_code")
+    corredor = db.query(models.Usuario).filter(models.Usuario.qr_code == qr_code).first()
     if not corredor:
         raise HTTPException(status_code=404, detail="Código QR no válido.")
     if corredor.acreditado:
@@ -251,10 +280,14 @@ def exportar_csv_corredores(db: Session = Depends(get_db)):
     f = StringIO()
     writer = csv.writer(f)
 <<<<<<< HEAD
+<<<<<<< HEAD
     writer.writerow(["ID", "Nombre Completo", "DNI", "Email", "Género", "F. Nacimiento", "WhatsApp", "Tel. Emergencia", "Grupo Sanguíneo", "Certificado Médico", "Distancia", "Talle Remera", "QR Code", "Acreditado", "Fecha Acreditacion"])
 =======
     writer.writerow(["ID", "Nombre Completo", "DNI", "Email", "Género", "F. Nacimiento", "WhatsApp", "Tel. Emergencia", "Grupo Sanguíneo", "Certificado Médico URL", "Distancia", "Talle Remera", "QR Code", "Acreditado", "Fecha Acreditacion"])
 >>>>>>> 57a0cff (Sincronización de stock de remeras y exportación CSV)
+=======
+    writer.writerow(["ID", "Nombre Completo", "DNI", "Email", "Género", "F. Nacimiento", "WhatsApp", "Tel. Emergencia", "Grupo Sanguíneo", "Certificado", "Distancia", "Talle Remera", "QR Code", "Acreditado", "Fecha Acreditacion"])
+>>>>>>> 80b3d4c (Actualización completa del backend con exportación CSV y stock de remeras)
     
     for c in corredores:
         writer.writerow([
@@ -273,34 +306,6 @@ def exportar_csv_corredores(db: Session = Depends(get_db)):
     response = StreamingResponse(iter([f.getvalue()]), media_type="text/csv")
     response.headers["Content-Disposition"] = "attachment; filename=corredores_maraton_mijovi.csv"
     return response
-
-@app.get("/api/fotos")
-def obtener_fotos(categoria: str = None, db: Session = Depends(get_db)):
-    query = db.query(models.FotoComunidad)
-    if categoria and categoria != "Todos":
-        query = query.filter(models.FotoComunidad.categoria == categoria)
-    return query.order_by(models.FotoComunidad.fecha_subida.desc()).all()
-
-@app.post("/api/fotos", status_code=status.HTTP_201_CREATED)
-def subir_foto(foto: FotoSubidaRequest, db: Session = Depends(get_db)):
-    nueva_foto = models.FotoComunidad(
-        usuario_nombre=foto.usuario_nombre, 
-        imagen_url=foto.imagen_url,
-        categoria=foto.categoria
-    )
-    db.add(nueva_foto)
-    db.commit()
-    db.refresh(nueva_foto)
-    return {"mensaje": "Foto publicada", "id": nueva_foto.id}
-
-@app.delete("/api/fotos/{foto_id}")
-def eliminar_foto(foto_id: int, db: Session = Depends(get_db)):
-    foto = db.query(models.FotoComunidad).filter(models.FotoComunidad.id == foto_id).first()
-    if not foto:
-        raise HTTPException(status_code=404, detail="Foto no encontrada")
-    db.delete(foto)
-    db.commit()
-    return {"mensaje": "Foto eliminada con éxito"}
 
 @app.get("/api/kpis")
 def obtener_kpis(db: Session = Depends(get_db)):
