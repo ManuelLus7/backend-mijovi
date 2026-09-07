@@ -3,19 +3,19 @@ import csv
 import datetime
 from io import StringIO
 from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, UploadFile, File, Form
-<<<<<<< HEAD
 from fastapi.responses import StreamingResponse, FileResponse
-=======
-from fastapi.responses import StreamingResponse
->>>>>>> 80b3d4c (Actualización completa del backend con exportación CSV y stock de remeras)
 from sqlalchemy.orm import Session
+from pydantic import BaseModel, EmailStr
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from dotenv import load_dotenv
 
 import models
 from database import engine, SessionLocal
 
+# Cargar variables de entorno
 load_dotenv()
+
+# Inicializar tablas en la base de datos
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="API Maratón Mijovi S.R.L.")
@@ -24,6 +24,7 @@ app = FastAPI(title="API Maratón Mijovi S.R.L.")
 UPLOAD_DIR = "uploads_certificados"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# Configuración SMTP (FastAPI-Mail)
 mail_config = ConnectionConfig(
     MAIL_USERNAME=os.getenv("MAIL_USERNAME", "usuario@gmail.com"),
     MAIL_PASSWORD=os.getenv("MAIL_PASSWORD", "password"),
@@ -43,23 +44,8 @@ def get_db():
     finally:
         db.close()
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-class RegistroCorredor(BaseModel):
-    nombre_completo: str
-    dni: str
-    email: EmailStr
-    genero: str
-    fecha_nacimiento: str
-    whatsapp: str
-    telefono_emergencia: str
-    grupo_sanguineo: str
-    certificado_medico_url: str = None
-    distancia: str
-    talle_remera: str
+# --- SCHEMAS DE VALIDACIÓN (PYDANTIC) ---
 
->>>>>>> 57a0cff (Sincronización de stock de remeras y exportación CSV)
 class ValidarQRRequest(BaseModel):
     qr_code: str
 
@@ -73,8 +59,8 @@ class CambiarDatosRequest(BaseModel):
     nueva_distancia: str = None
     nuevo_talle: str = None
 
-=======
->>>>>>> 80b3d4c (Actualización completa del backend con exportación CSV y stock de remeras)
+# --- TAREA EN SEGUNDO PLANO: CORREO DE CONFIRMACIÓN ---
+
 async def enviar_correo_confirmacion(email_destino: str, nombre: str, dni: str, distancia: str, qr_code: str, talle: str):
     qr_image_url = f"https://quickchart.io/qr?text={qr_code}&size=200"
     html_content = f"""
@@ -94,6 +80,11 @@ async def enviar_correo_confirmacion(email_destino: str, nombre: str, dni: str, 
                     <p style="margin: 5px 0; color: #333;"><strong>Talle de Remera:</strong> {talle}</p>
                     <p style="margin: 5px 0; color: #333;"><strong>Código Pase:</strong> {qr_code}</p>
                 </div>
+                <p style="color: #333; font-weight: bold;">Tu Código QR de Acreditación:</p>
+                <img src="{qr_image_url}" alt="Código QR Acreditación" style="width: 180px; height: 180px; border: 2px solid #ddd; padding: 5px; border-radius: 8px; margin-bottom: 15px;">
+            </div>
+            <div style="background-color: #f4f4f4; padding: 15px; text-align: center; color: #888888; font-size: 12px;">
+                Mijovi S.R.L. © 2027 - Todos los derechos reservados.
             </div>
         </div>
     </body>
@@ -111,16 +102,15 @@ async def enviar_correo_confirmacion(email_destino: str, nombre: str, dni: str, 
     except Exception as e:
         print(f"Error al enviar correo a {email_destino}: {e}")
 
+# --- ENDPOINTS ---
+
+# 1. Registro de Corredor (Con recepción de formulario y PDF opcional)
 @app.post("/api/registro", status_code=status.HTTP_201_CREATED)
 async def registrar_corredor(
     background_tasks: BackgroundTasks,
     nombre_completo: str = Form(...),
     dni: str = Form(...),
-<<<<<<< HEAD
     email: EmailStr = Form(...),
-=======
-    email: str = Form(...),
->>>>>>> 80b3d4c (Actualización completa del backend con exportación CSV y stock de remeras)
     genero: str = Form(...),
     fecha_nacimiento: str = Form(...),
     whatsapp: str = Form(...),
@@ -136,7 +126,6 @@ async def registrar_corredor(
     if db.query(models.Usuario).filter(models.Usuario.email == email).first():
         raise HTTPException(status_code=400, detail="El correo electrónico ya se encuentra registrado.")
     
-<<<<<<< HEAD
     pdf_path = None
     if certificado_pdf:
         file_ext = certificado_pdf.filename.split(".")[-1]
@@ -147,15 +136,6 @@ async def registrar_corredor(
 
     qr_generado = f"MIJOVI-{dni}-{distancia}"
     nuevo_usuario = models.Usuario(
-<<<<<<< HEAD
-=======
-    pdf_url = None
-    if certificado_pdf:
-        pdf_url = f"certificados/{dni}_{certificado_pdf.filename}"
-
-    qr_generado = f"MIJOVI-{dni}-{distancia}"
-    nuevo_usuario = models.Usuario(
->>>>>>> 80b3d4c (Actualización completa del backend con exportación CSV y stock de remeras)
         nombre_completo=nombre_completo,
         dni=dni,
         email=email,
@@ -164,28 +144,9 @@ async def registrar_corredor(
         whatsapp=whatsapp,
         telefono_emergencia=telefono_emergencia,
         grupo_sanguineo=grupo_sanguineo,
-<<<<<<< HEAD
         certificado_medico_url=pdf_path,
         distancia=distancia,
         talle_remera=talle_remera,
-=======
-        nombre_completo=corredor.nombre_completo,
-        dni=corredor.dni,
-        email=corredor.email,
-        genero=corredor.genero,
-        fecha_nacimiento=corredor.fecha_nacimiento,
-        whatsapp=corredor.whatsapp,
-        telefono_emergencia=corredor.telefono_emergencia,
-        grupo_sanguineo=corredor.grupo_sanguineo,
-        certificado_medico_url=corredor.certificado_medico_url,
-        distancia=corredor.distancia,
-        talle_remera=corredor.talle_remera,
->>>>>>> 57a0cff (Sincronización de stock de remeras y exportación CSV)
-=======
-        certificado_medico_url=pdf_url,
-        distancia=distancia,
-        talle_remera=talle_remera,
->>>>>>> 80b3d4c (Actualización completa del backend con exportación CSV y stock de remeras)
         qr_code=qr_generado,
         acreditado=False
     )
@@ -204,6 +165,7 @@ async def registrar_corredor(
     )
     return {"mensaje": "Inscripción exitosa.", "qr_code": qr_generado, "id": nuevo_usuario.id}
 
+# 2. Búsqueda de Inscripción por DNI
 @app.get("/api/corredor/dni/{dni}")
 def buscar_inscripcion(dni: str, db: Session = Depends(get_db)):
     corredor = db.query(models.Usuario).filter(models.Usuario.dni == dni).first()
@@ -211,7 +173,7 @@ def buscar_inscripcion(dni: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Inscripción no encontrada para este DNI.")
     return corredor
 
-<<<<<<< HEAD
+# 3. Cambiar Datos de Inscripción (Distancia o Talle)
 @app.put("/api/corredor/cambiar-datos")
 def cambiar_datos_corredor(payload: CambiarDatosRequest, db: Session = Depends(get_db)):
     corredor = db.query(models.Usuario).filter(models.Usuario.dni == payload.dni).first()
@@ -230,23 +192,19 @@ def cambiar_datos_corredor(payload: CambiarDatosRequest, db: Session = Depends(g
     db.commit()
     db.refresh(corredor)
     return {"status": "exito", "mensaje": "Datos actualizados correctamente.", "corredor": corredor}
-<<<<<<< HEAD
 
+# 4. Descargar Certificado Médico (PDF)
 @app.get("/api/admin/descargar-certificado/{dni}")
 def descargar_certificado(dni: str, db: Session = Depends(get_db)):
     corredor = db.query(models.Usuario).filter(models.Usuario.dni == dni).first()
     if not corredor or not corredor.certificado_medico_url or not os.path.exists(corredor.certificado_medico_url):
         raise HTTPException(status_code=404, detail="Certificado médico no encontrado para este corredor.")
     return FileResponse(corredor.certificado_medico_url, media_type="application/pdf", filename=f"certificado_{dni}.pdf")
-=======
->>>>>>> 57a0cff (Sincronización de stock de remeras y exportación CSV)
 
-=======
->>>>>>> 80b3d4c (Actualización completa del backend con exportación CSV y stock de remeras)
+# 5. Acreditación por QR (Staff)
 @app.post("/api/admin/acreditar")
-def acreditar_corredor(payload: dict, db: Session = Depends(get_db)):
-    qr_code = payload.get("qr_code")
-    corredor = db.query(models.Usuario).filter(models.Usuario.qr_code == qr_code).first()
+def acreditar_corredor(payload: ValidarQRRequest, db: Session = Depends(get_db)):
+    corredor = db.query(models.Usuario).filter(models.Usuario.qr_code == payload.qr_code).first()
     if not corredor:
         raise HTTPException(status_code=404, detail="Código QR no válido.")
     if corredor.acreditado:
@@ -257,6 +215,7 @@ def acreditar_corredor(payload: dict, db: Session = Depends(get_db)):
     db.commit()
     return {"status": "exito", "mensaje": "✅ Kit Entregado", "corredor": {"nombre": corredor.nombre_completo, "dni": corredor.dni, "distancia": corredor.distancia, "talle": corredor.talle_remera}}
 
+# 6. Acreditación Manual por DNI (Staff)
 @app.post("/api/admin/acreditar-manual/{dni}")
 def acreditar_manual(dni: str, db: Session = Depends(get_db)):
     corredor = db.query(models.Usuario).filter(models.Usuario.dni == dni).first()
@@ -270,33 +229,23 @@ def acreditar_manual(dni: str, db: Session = Depends(get_db)):
     db.commit()
     return {"mensaje": f"✅ Kit de {corredor.nombre_completo} acreditado manualmente."}
 
+# 7. Listado General de Corredores (Staff)
 @app.get("/api/admin/corredores")
 def listar_todos_corredores(db: Session = Depends(get_db)):
     return db.query(models.Usuario).all()
 
+# 8. Exportar Padrón a CSV (Staff)
 @app.get("/api/admin/exportar-csv")
 def exportar_csv_corredores(db: Session = Depends(get_db)):
     corredores = db.query(models.Usuario).all()
     f = StringIO()
     writer = csv.writer(f)
-<<<<<<< HEAD
-<<<<<<< HEAD
     writer.writerow(["ID", "Nombre Completo", "DNI", "Email", "Género", "F. Nacimiento", "WhatsApp", "Tel. Emergencia", "Grupo Sanguíneo", "Certificado Médico", "Distancia", "Talle Remera", "QR Code", "Acreditado", "Fecha Acreditacion"])
-=======
-    writer.writerow(["ID", "Nombre Completo", "DNI", "Email", "Género", "F. Nacimiento", "WhatsApp", "Tel. Emergencia", "Grupo Sanguíneo", "Certificado Médico URL", "Distancia", "Talle Remera", "QR Code", "Acreditado", "Fecha Acreditacion"])
->>>>>>> 57a0cff (Sincronización de stock de remeras y exportación CSV)
-=======
-    writer.writerow(["ID", "Nombre Completo", "DNI", "Email", "Género", "F. Nacimiento", "WhatsApp", "Tel. Emergencia", "Grupo Sanguíneo", "Certificado", "Distancia", "Talle Remera", "QR Code", "Acreditado", "Fecha Acreditacion"])
->>>>>>> 80b3d4c (Actualización completa del backend con exportación CSV y stock de remeras)
     
     for c in corredores:
         writer.writerow([
             c.id, c.nombre_completo, c.dni, c.email, c.genero, c.fecha_nacimiento,
-<<<<<<< HEAD
             c.whatsapp, c.telefono_emergencia, c.grupo_sanguineo, "Adjunto" if c.certificado_medico_url else "No Adjunto",
-=======
-            c.whatsapp, c.telefono_emergencia, c.grupo_sanguineo, c.certificado_medico_url or "",
->>>>>>> 57a0cff (Sincronización de stock de remeras y exportación CSV)
             c.distancia, c.talle_remera, c.qr_code, 
             "SI" if c.acreditado else "NO", 
             c.fecha_acreditacion.strftime('%Y-%m-%d %H:%M:%S') if c.fecha_acreditacion else ""
@@ -307,6 +256,36 @@ def exportar_csv_corredores(db: Session = Depends(get_db)):
     response.headers["Content-Disposition"] = "attachment; filename=corredores_maraton_mijovi.csv"
     return response
 
+# 9. Gestión de Fotos en la Comunidad (Muro)
+@app.get("/api/fotos")
+def obtener_fotos(categoria: str = None, db: Session = Depends(get_db)):
+    query = db.query(models.FotoComunidad)
+    if categoria and categoria != "Todos":
+        query = query.filter(models.FotoComunidad.categoria == categoria)
+    return query.order_by(models.FotoComunidad.fecha_subida.desc()).all()
+
+@app.post("/api/fotos", status_code=status.HTTP_201_CREATED)
+def subir_foto(foto: FotoSubidaRequest, db: Session = Depends(get_db)):
+    nueva_foto = models.FotoComunidad(
+        usuario_nombre=foto.usuario_nombre, 
+        imagen_url=foto.imagen_url,
+        categoria=foto.categoria
+    )
+    db.add(nueva_foto)
+    db.commit()
+    db.refresh(nueva_foto)
+    return {"mensaje": "Foto publicada", "id": nueva_foto.id}
+
+@app.delete("/api/fotos/{foto_id}")
+def eliminar_foto(foto_id: int, db: Session = Depends(get_db)):
+    foto = db.query(models.FotoComunidad).filter(models.FotoComunidad.id == foto_id).first()
+    if not foto:
+        raise HTTPException(status_code=404, detail="Foto no encontrada")
+    db.delete(foto)
+    db.commit()
+    return {"mensaje": "Foto eliminada con éxito"}
+
+# 10. Métricas y Control de Inventario de Remeras (KPIs)
 @app.get("/api/kpis")
 def obtener_kpis(db: Session = Depends(get_db)):
     total = db.query(models.Usuario).count()
