@@ -2,21 +2,30 @@ import os
 import csv
 import datetime
 from io import StringIO
-from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, UploadFile, File, Form
+from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from dotenv import load_dotenv
+from typing import Optional
 
 import models
 from database import engine, SessionLocal
 
+# Cargar variables de entorno
 load_dotenv()
+
+# Inicializar tablas en la base de datos
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="API Maratón Mijovi S.R.L.")
 
+# Directorio local para guardar los PDFs escaneados de certificados médicos
+UPLOAD_DIR = "uploads_certificados"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# Configuración SMTP (FastAPI-Mail)
 mail_config = ConnectionConfig(
     MAIL_USERNAME=os.getenv("MAIL_USERNAME", "usuario@gmail.com"),
     MAIL_PASSWORD=os.getenv("MAIL_PASSWORD", "password"),
@@ -36,18 +45,7 @@ def get_db():
     finally:
         db.close()
 
-class RegistroCorredor(BaseModel):
-    nombre_completo: str
-    dni: str
-    email: EmailStr
-    genero: str
-    fecha_nacimiento: str
-    whatsapp: str
-    telefono_emergencia: str
-    grupo_sanguineo: str
-    certificado_medico_url: str = None
-    distancia: str
-    talle_remera: str
+# --- SCHEMAS DE VALIDACIÓN (PYDANTIC) ---
 
 class ValidarQRRequest(BaseModel):
     qr_code: str
@@ -59,8 +57,17 @@ class FotoSubidaRequest(BaseModel):
 
 class CambiarDatosRequest(BaseModel):
     dni: str
-    nueva_distancia: str = None
-    nuevo_talle: str = None
+    nueva_distancia: Optional[str] = None
+    nuevo_talle: Optional[str] = None
+
+class AlbumOficialCreate(BaseModel):
+    titulo: str
+    subtitulo: Optional[str] = None
+    google_photos_url: str
+    portada_url: Optional[str] = "https://images.unsplash.com/photo-1530549387789-4c1017266635?auto=format&fit=crop&w=800&q=80"
+    fecha_evento: Optional[str] = "2027"
+
+# --- TAREA EN SEGUNDO PLANO: CORREO DE CONFIRMACIÓN ---
 
 async def enviar_correo_confirmacion(email_destino: str, nombre: str, dni: str, distancia: str, qr_code: str, talle: str):
     qr_image_url = f"https://quickchart.io/qr?text={qr_code}&size=200"
@@ -84,6 +91,9 @@ async def enviar_correo_confirmacion(email_destino: str, nombre: str, dni: str, 
                 <p style="color: #333; font-weight: bold;">Tu Código QR de Acreditación:</p>
                 <img src="{qr_image_url}" alt="Código QR Acreditación" style="width: 180px; height: 180px; border: 2px solid #ddd; padding: 5px; border-radius: 8px; margin-bottom: 15px;">
             </div>
+            <div style="background-color: #f4f4f4; padding: 15px; text-align: center; color: #888888; font-size: 12px;">
+                Mijovi S.R.L. © 2027 - Todos los derechos reservados.
+            </div>
         </div>
     </body>
     </html>
@@ -100,26 +110,51 @@ async def enviar_correo_confirmacion(email_destino: str, nombre: str, dni: str, 
     except Exception as e:
         print(f"Error al enviar correo a {email_destino}: {e}")
 
+# --- ENDPOINTS ---
+
+# 1. Registro de Corredor
 @app.post("/api/registro", status_code=status.HTTP_201_CREATED)
-def registrar_corredor(corredor: RegistroCorredor, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    if db.query(models.Usuario).filter(models.Usuario.dni == corredor.dni).first():
+async def registrar_corredor(
+    background_tasks: BackgroundTasks,
+    nombre_completo: str = Form(...),
+    dni: str = Form(...),
+    email: EmailStr = Form(...),
+    genero: str = Form(...),
+    fecha_nacimiento: str = Form(...),
+    whatsapp: str = Form(...),
+    telefono_emergencia: str = Form(...),
+    grupo_sanguineo: str = Form(...),
+    distancia: str = Form(...),
+    talle_remera: str = Form(...),
+    certificado_pdf: UploadFile = File(None),
+    db: Session = Depends(get_db)
+):
+    if db.query(models.Usuario).filter(models.Usuario.dni == dni).first():
         raise HTTPException(status_code=400, detail="El DNI ya se encuentra registrado.")
-    if db.query(models.Usuario).filter(models.Usuario.email == corredor.email).first():
+    if db.query(models.Usuario).filter(models.Usuario.email == email).first():
         raise HTTPException(status_code=400, detail="El correo electrónico ya se encuentra registrado.")
     
-    qr_generado = f"MIJOVI-{corredor.dni}-{corredor.distancia}"
+    pdf_path = None
+    if certificado_pdf:
+        file_ext = certificado_pdf.filename.split(".")[-1]
+        file_name = f"certificado_{dni}.{file_ext}"
+        pdf_path = os.path.join(UPLOAD_DIR, file_name)
+        with open(pdf_path, "wb") as buffer:
+            buffer.write(await certificado_pdf.read())
+
+    qr_generado = f"MIJOVI-{dni}-{distancia}"
     nuevo_usuario = models.Usuario(
-        nombre_completo=corredor.nombre_completo,
-        dni=corredor.dni,
-        email=corredor.email,
-        genero=corredor.genero,
-        fecha_nacimiento=corredor.fecha_nacimiento,
-        whatsapp=corredor.whatsapp,
-        telefono_emergencia=corredor.telefono_emergencia,
-        grupo_sanguineo=corredor.grupo_sanguineo,
-        certificado_medico_url=corredor.certificado_medico_url,
-        distancia=corredor.distancia,
-        talle_remera=corredor.talle_remera,
+        nombre_completo=nombre_completo,
+        dni=dni,
+        email=email,
+        genero=genero,
+        fecha_nacimiento=fecha_nacimiento,
+        whatsapp=whatsapp,
+        telefono_emergencia=telefono_emergencia,
+        grupo_sanguineo=grupo_sanguineo,
+        certificado_medico_url=pdf_path,
+        distancia=distancia,
+        talle_remera=talle_remera,
         qr_code=qr_generado,
         acreditado=False
     )
@@ -129,15 +164,16 @@ def registrar_corredor(corredor: RegistroCorredor, background_tasks: BackgroundT
 
     background_tasks.add_task(
         enviar_correo_confirmacion,
-        email_destino=corredor.email,
-        nombre=corredor.nombre_completo,
-        dni=corredor.dni,
-        distancia=corredor.distancia,
+        email_destino=email,
+        nombre=nombre_completo,
+        dni=dni,
+        distancia=distancia,
         qr_code=qr_generado,
-        talle=corredor.talle_remera
+        talle=talle_remera
     )
     return {"mensaje": "Inscripción exitosa.", "qr_code": qr_generado, "id": nuevo_usuario.id}
 
+# 2. Búsqueda de Inscripción por DNI
 @app.get("/api/corredor/dni/{dni}")
 def buscar_inscripcion(dni: str, db: Session = Depends(get_db)):
     corredor = db.query(models.Usuario).filter(models.Usuario.dni == dni).first()
@@ -145,6 +181,7 @@ def buscar_inscripcion(dni: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Inscripción no encontrada para este DNI.")
     return corredor
 
+# 3. Cambiar Datos de Inscripción (Distancia o Talle)
 @app.put("/api/corredor/cambiar-datos")
 def cambiar_datos_corredor(payload: CambiarDatosRequest, db: Session = Depends(get_db)):
     corredor = db.query(models.Usuario).filter(models.Usuario.dni == payload.dni).first()
@@ -164,6 +201,15 @@ def cambiar_datos_corredor(payload: CambiarDatosRequest, db: Session = Depends(g
     db.refresh(corredor)
     return {"status": "exito", "mensaje": "Datos actualizados correctamente.", "corredor": corredor}
 
+# 4. Descargar Certificado Médico (PDF)
+@app.get("/api/admin/descargar-certificado/{dni}")
+def descargar_certificado(dni: str, db: Session = Depends(get_db)):
+    corredor = db.query(models.Usuario).filter(models.Usuario.dni == dni).first()
+    if not corredor or not corredor.certificado_medico_url or not os.path.exists(corredor.certificado_medico_url):
+        raise HTTPException(status_code=404, detail="Certificado médico no encontrado para este corredor.")
+    return FileResponse(corredor.certificado_medico_url, media_type="application/pdf", filename=f"certificado_{dni}.pdf")
+
+# 5. Acreditación por QR (Staff)
 @app.post("/api/admin/acreditar")
 def acreditar_corredor(payload: ValidarQRRequest, db: Session = Depends(get_db)):
     corredor = db.query(models.Usuario).filter(models.Usuario.qr_code == payload.qr_code).first()
@@ -177,6 +223,7 @@ def acreditar_corredor(payload: ValidarQRRequest, db: Session = Depends(get_db))
     db.commit()
     return {"status": "exito", "mensaje": "✅ Kit Entregado", "corredor": {"nombre": corredor.nombre_completo, "dni": corredor.dni, "distancia": corredor.distancia, "talle": corredor.talle_remera}}
 
+# 6. Acreditación Manual por DNI (Staff)
 @app.post("/api/admin/acreditar-manual/{dni}")
 def acreditar_manual(dni: str, db: Session = Depends(get_db)):
     corredor = db.query(models.Usuario).filter(models.Usuario.dni == dni).first()
@@ -190,21 +237,23 @@ def acreditar_manual(dni: str, db: Session = Depends(get_db)):
     db.commit()
     return {"mensaje": f"✅ Kit de {corredor.nombre_completo} acreditado manualmente."}
 
+# 7. Listado General de Corredores (Staff)
 @app.get("/api/admin/corredores")
 def listar_todos_corredores(db: Session = Depends(get_db)):
     return db.query(models.Usuario).all()
 
+# 8. Exportar Padrón a CSV (Staff)
 @app.get("/api/admin/exportar-csv")
 def exportar_csv_corredores(db: Session = Depends(get_db)):
     corredores = db.query(models.Usuario).all()
     f = StringIO()
     writer = csv.writer(f)
-    writer.writerow(["ID", "Nombre Completo", "DNI", "Email", "Género", "F. Nacimiento", "WhatsApp", "Tel. Emergencia", "Grupo Sanguíneo", "Certificado Médico URL", "Distancia", "Talle Remera", "QR Code", "Acreditado", "Fecha Acreditacion"])
+    writer.writerow(["ID", "Nombre Completo", "DNI", "Email", "Género", "F. Nacimiento", "WhatsApp", "Tel. Emergencia", "Grupo Sanguíneo", "Certificado Médico", "Distancia", "Talle Remera", "QR Code", "Acreditado", "Fecha Acreditacion"])
     
     for c in corredores:
         writer.writerow([
             c.id, c.nombre_completo, c.dni, c.email, c.genero, c.fecha_nacimiento,
-            c.whatsapp, c.telefono_emergencia, c.grupo_sanguineo, c.certificado_medico_url or "",
+            c.whatsapp, c.telefono_emergencia, c.grupo_sanguineo, "Adjunto" if c.certificado_medico_url else "No Adjunto",
             c.distancia, c.talle_remera, c.qr_code, 
             "SI" if c.acreditado else "NO", 
             c.fecha_acreditacion.strftime('%Y-%m-%d %H:%M:%S') if c.fecha_acreditacion else ""
@@ -215,8 +264,9 @@ def exportar_csv_corredores(db: Session = Depends(get_db)):
     response.headers["Content-Disposition"] = "attachment; filename=corredores_maraton_mijovi.csv"
     return response
 
+# 9. Gestión de Fotos en la Comunidad (Muro)
 @app.get("/api/fotos")
-def obtener_fotos(categoria: str = None, db: Session = Depends(get_db)):
+def obtener_fotos(categoria: Optional[str] = None, db: Session = Depends(get_db)):
     query = db.query(models.FotoComunidad)
     if categoria and categoria != "Todos":
         query = query.filter(models.FotoComunidad.categoria == categoria)
@@ -243,6 +293,20 @@ def eliminar_foto(foto_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"mensaje": "Foto eliminada con éxito"}
 
+# 10. Listado y Creación de Álbumes Oficiales HD (Google Fotos)
+@app.get("/api/albumes-oficiales")
+def obtener_albumes_oficiales(db: Session = Depends(get_db)):
+    return db.query(models.AlbumOficial).order_by(models.AlbumOficial.id.desc()).all()
+
+@app.post("/api/admin/albumes-oficiales", status_code=status.HTTP_201_CREATED)
+def crear_album_oficial(album: AlbumOficialCreate, db: Session = Depends(get_db)):
+    nuevo_album = models.AlbumOficial(**album.dict())
+    db.add(nuevo_album)
+    db.commit()
+    db.refresh(nuevo_album)
+    return {"mensaje": "Álbum oficial creado con éxito", "id": nuevo_album.id}
+
+# 11. Métricas y Control de Inventario de Remeras (KPIs)
 @app.get("/api/kpis")
 def obtener_kpis(db: Session = Depends(get_db)):
     total = db.query(models.Usuario).count()
@@ -255,10 +319,14 @@ def obtener_kpis(db: Session = Depends(get_db)):
         ent = db.query(models.Usuario).filter(models.Usuario.talle_remera == t, models.Usuario.acreditado.is_(True)).count()
         inventario[t] = {"solicitados": sol, "entregados": ent, "pendientes": sol - ent}
 
+    meta = 1000
+    porcentaje_meta = round((total / meta) * 100, 1) if meta > 0 else 0
+
     return {
         "total_inscriptos": total,
         "total_acreditados": acreditados,
         "pendientes_kit": total - acreditados,
+        "porcentaje_meta": porcentaje_meta,
         "control_medallas": {
             "medallas_entregadas": acreditados,
             "medallas_en_stock": max(0, 2000 - acreditados)
