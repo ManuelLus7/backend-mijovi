@@ -52,7 +52,9 @@
         {
           "cameraPermission": "Permite utilizar la cámara para la acreditación de kits y fotos con el marco oficial."
         }
-      ]
+      ],
+      "expo-video",
+      "react-native-fast-tflite"
     ],
     "extra": {
       "eas": {

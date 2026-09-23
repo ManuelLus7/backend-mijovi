@@ -1,0 +1,31 @@
+1. Sistema de Ficha Médica Avanzada y Validaciones Estrictas
+Validación Inteligente de Datos Personales: Incorporar filtros en tiempo real para evitar errores de tipeo en los campos críticos:
+
+Email: Verificación de formato con @ y dominio correcto antes de permitir el alta.
+
+Teléfono y WhatsApp: Restricción a formato numérico con prefijo para asegurar las notificaciones automáticas.
+
+Fecha de Nacimiento: Máscara de entrada automática en formato DD/MM/AAAA para mantener la consistencia en el padrón.
+
+Estabilidad en Adjuntos (PDF / Certificado): Reemplazar el selector actual por un método asíncrono robusto mediante expo-document-picker que evite bloqueos de hilos, bucles o pantallas en negro en Android al subir el certificado médico obligatorio para las categorías de 10K y 21K.
+
+2. Panel Logístico de Stock y Talles en Tiempo Real
+Control de Inventario Cruzado: Ampliar el panel de control del Staff para que no solo muestre cuántos inscriptos hay, sino un desglose gráfico interactivo de remeras (S, M, L, XL, XXL) reflejando de forma dinámica:
+
+Remeras solicitadas por los corredores al inscribirse.
+
+Remeras entregadas oficialmente tras el escaneo del QR.
+
+Stock remanente exacto en el stand de acreditación para evitar faltantes de última hora.
+
+3. Experiencia del Atleta en "Mi Pase"
+Información Útil del Día de la Carrera: Enriquecer la tarjeta digital del corredor para que, además del código QR de acceso y sus datos de emergencia, visualice de forma clara:
+
+Horario exacto de largada según su distancia (5K, 10K o 21K).
+
+Estado de su certificado médico (Aprobado / Pendiente de revisión).
+
+Ubicación y horarios del centro de entrega de kits.
+
+4. Muro Comunitario y Moderación de Contenido
+Gestión de Publicaciones Propias: Permitir que los usuarios que suban fotos al muro comunitario con el marco oficial puedan eliminarlas si lo desean, y dotar al usuario Administrador de un botón de moderación rápida para borrar publicaciones inapropiadas directamente desde la app.

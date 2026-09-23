@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, 
-  Alert, StatusBar, RefreshControl, Modal, Linking, Image 
+  Alert, StatusBar, RefreshControl, Modal, Linking, Platform, Image 
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import * as DocumentPicker from 'expo-document-picker';
 import SplashScreen from './src/SplashScreen';
 import CameraScreen from './src/CameraScreen';
 import AdminScannerScreen from './src/AdminScannerScreen';
 import CommunityFeedScreen from './src/CommunityFeedScreen';
 import PerfilScreen from './src/PerfilScreen';
 import { Colors } from './colors';
+import AsistenteIAScreen from './src/AsistenteIAScreen';
 
 const API_URL = 'https://backend-mijovi-production.up.railway.app';
 const INSTAGRAM_PROFILE_URL = 'https://www.instagram.com/maratonmijovi/?hl=es';
@@ -36,11 +39,16 @@ export default function App() {
   const [dni, setDni] = useState('');
   const [email, setEmail] = useState('');
   const [genero, setGenero] = useState('Masculino');
+  
+  // Estados para el Calendario y Fecha de Nacimiento
+  const [date, setDate] = useState(new Date(1995, 0, 1));
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [fechaNac, setFechaNac] = useState('');
+
   const [whatsapp, setWhatsapp] = useState('');
   const [telEmergencia, setTelEmergencia] = useState('');
-  const [grupoSanguineo, setGrupoSanguineo] = useState('O+');
-  const [certificadoUrl, setCertificadoUrl] = useState('');
+  const [grupoSanguineo, setGrupoSanguineo] = useState(''); // Estado para texto libre / opcional
+  const [pdfCertificado, setPdfCertificado] = useState<any>(null);
   const [distancia, setDistancia] = useState('10K');
   const [talle, setTalle] = useState('L');
 
@@ -49,17 +57,58 @@ export default function App() {
     total_inscriptos: 0, 
     total_acreditados: 0, 
     pendientes_kit: 0, 
+    control_medallas: { medallas_entregadas: 0, medallas_en_stock: 2000 },
     distribucion: { '5K': 0, '10K': 0, '21K': 0 },
     inventario_talles: {}
   });
   const [listaCorredores, setListaCorredores] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Formateador y máscara visual de fecha
+  const handleFechaChange = (text: string) => {
+    const cleaned = text.replace(/\D/g, '');
+    let formatted = cleaned;
+    if (cleaned.length > 2 && cleaned.length <= 4) {
+      formatted = `${cleaned.slice(0, 2)}/${cleaned.slice(2)}`;
+    } else if (cleaned.length > 4) {
+      formatted = `${cleaned.slice(0, 2)}/${cleaned.slice(2, 4)}/${cleaned.slice(4, 8)}`;
+    }
+    setFechaNac(formatted);
+  };
+
+  // Validación estricta de calendario (Días reales por mes y bisiestos)
+  const esFechaValida = (fechaStr: string) => {
+    const regex = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[02])\/\d{4}$/;
+    if (!regex.test(fechaStr)) return false;
+
+    const [diaStr, mesStr, anioStr] = fechaStr.split('/');
+    const dia = parseInt(diaStr, 10);
+    const mes = parseInt(mesStr, 10);
+    const anio = parseInt(anioStr, 10);
+
+    if (anio < 1920 || anio > 2020) return false;
+
+    const diasPorMes = [31, (anio % 4 === 0 && (anio % 100 !== 0 || anio % 400 === 0)) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    return dia <= diasPorMes[mes - 1];
+  };
+
+  const seleccionarPdfCertificado = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', copyToCacheDirectory: true });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setPdfCertificado(result.assets[0]);
+        Alert.alert("¡Archivo Adjunto!", `Certificado cargado: ${result.assets[0].name}`);
+      }
+    } catch (e) {
+      Alert.alert("Error", "No se pudo seleccionar el archivo PDF");
+    }
+  };
+
   const fetchKpis = async () => {
     try {
       const res = await fetch(`${API_URL}/api/kpis`);
       if (res.ok) setKpis(await res.json());
-    } catch (e) { console.log("Backend offline"); }
+    } catch (e) { console.log("Backend offline o error de red"); }
   };
 
   const fetchListaAdmin = async () => {
@@ -84,14 +133,9 @@ export default function App() {
   const openInstagram = async (url: string = INSTAGRAM_PROFILE_URL) => {
     try {
       const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
-      } else {
-        await Linking.openURL(INSTAGRAM_PROFILE_URL);
-      }
-    } catch (e) {
-      Linking.openURL(INSTAGRAM_PROFILE_URL);
-    }
+      if (supported) await Linking.openURL(url);
+      else await Linking.openURL(INSTAGRAM_PROFILE_URL);
+    } catch (e) { Linking.openURL(INSTAGRAM_PROFILE_URL); }
   };
 
   const exportarCSV = () => {
@@ -109,9 +153,7 @@ export default function App() {
       } else {
         Alert.alert("Error", data.detail);
       }
-    } catch (e) {
-      Alert.alert("Error", "No se pudo conectar al servidor");
-    }
+    } catch (e) { Alert.alert("Error", "No se pudo conectar al servidor"); }
   };
 
   const handlePinSubmit = () => {
@@ -129,34 +171,54 @@ export default function App() {
     if (!nombre || !dni || !email || !whatsapp || !telEmergencia || !fechaNac) {
       return Alert.alert('Atención', 'Por favor completa todos los campos obligatorios');
     }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return Alert.alert('Formato Inválido', 'Ingresa una dirección de correo electrónico correcta');
+    }
+
+    if (!esFechaValida(fechaNac)) {
+      return Alert.alert('Fecha Incorrecta', 'Ingresa una fecha de nacimiento válida en formato DD/MM/AAAA');
+    }
+
     try {
+      const formData = new FormData();
+      formData.append('nombre_completo', nombre);
+      formData.append('dni', dni);
+      formData.append('email', email);
+      formData.append('genero', genero);
+      formData.append('fecha_nacimiento', fechaNac);
+      formData.append('whatsapp', whatsapp);
+      formData.append('telefono_emergencia', telEmergencia);
+      formData.append('grupo_sanguineo', grupoSanguineo ? grupoSanguineo.toUpperCase() : 'NO ESPECIFICADO');
+      formData.append('distancia', distancia);
+      formData.append('talle_remera', talle);
+
+      if (pdfCertificado) {
+        formData.append('certificado_pdf', {
+          uri: pdfCertificado.uri,
+          name: pdfCertificado.name || 'certificado.pdf',
+          type: 'application/pdf',
+        } as any);
+      }
+
       const res = await fetch(`${API_URL}/api/registro`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nombre_completo: nombre,
-          dni,
-          email,
-          genero,
-          fecha_nacimiento: fechaNac,
-          whatsapp,
-          telefono_emergencia: telEmergencia,
-          grupo_sanguineo: grupoSanguineo,
-          certificado_medico_url: certificadoUrl,
-          distancia,
-          talle_remera: talle
-        })
+        body: formData,
       });
+
       const data = await res.json();
       if (res.ok) {
         Alert.alert('¡Inscripción Confirmada!', `Código QR: ${data.qr_code}`);
-        setNombre(''); setDni(''); setEmail(''); setWhatsapp(''); setTelEmergencia(''); setFechaNac(''); setCertificadoUrl('');
+        setNombre(''); setDni(''); setEmail(''); setWhatsapp(''); setTelEmergencia(''); setFechaNac(''); setGrupoSanguineo(''); setPdfCertificado(null);
         fetchKpis();
         setUserTab('pase');
       } else {
-        Alert.alert('Error', data.detail || 'Fallo el registro');
+        Alert.alert('Error', data.detail || 'Falló el registro');
       }
-    } catch (e) { Alert.alert('Error', 'Sin conexión con el servidor'); }
+    } catch (e) { 
+      Alert.alert('Error de Conexión', 'Sin conexión con el servidor. Revisa tu red.'); 
+    }
   };
 
   const toggleFaq = (index: number) => {
@@ -230,7 +292,7 @@ export default function App() {
           </View>
         </Modal>
 
-        {/* Modal de Información y Registro de Versiones (Changelog v1.1.0) */}
+        {/* Modal de Información y Changelog v1.2.0 */}
         <Modal visible={versionModalVisible} transparent animationType="slide">
           <View style={styles.modalBg}>
             <View style={styles.versionModalCard}>
@@ -240,7 +302,7 @@ export default function App() {
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <Text style={styles.versionModalTitle}>Maratón Mijovi S.R.L.</Text>
-                  <Text style={styles.versionSubTitle}>Versión Estable v1.1.0</Text>
+                  <Text style={styles.versionSubTitle}>Versión Estable v1.2.0</Text>
                 </View>
                 <TouchableOpacity onPress={() => setVersionModalVisible(false)} style={styles.closeIconBtn}>
                   <Ionicons name="close" size={22} color={Colors.black} />
@@ -248,6 +310,7 @@ export default function App() {
               </View>
 
               <ScrollView style={styles.versionScrollBody} showsVerticalScrollIndicator={false}>
+                
                 {/* TARJETA DE PERFIL PROFESIONAL DEL DESARROLLADOR */}
                 <View style={styles.devProfileBoxModal}>
                   <Ionicons name="briefcase" size={24} color={Colors.primary} style={{ marginBottom: 6 }} />
@@ -521,6 +584,7 @@ export default function App() {
                         placeholder="Correo Electrónico" 
                         placeholderTextColor="#888" 
                         keyboardType="email-address" 
+                        autoCapitalize="none"
                         value={email} 
                         onChangeText={setEmail} 
                       />
@@ -529,8 +593,10 @@ export default function App() {
                         style={styles.input} 
                         placeholder="Fecha de Nacimiento (DD/MM/AAAA)" 
                         placeholderTextColor="#888" 
+                        keyboardType="numeric"
+                        maxLength={10}
                         value={fechaNac} 
-                        onChangeText={setFechaNac} 
+                        onChangeText={handleFechaChange} 
                       />
 
                       <TextInput 
@@ -560,14 +626,16 @@ export default function App() {
                         ))}
                       </View>
 
-                      <Text style={styles.label}>Grupo Sanguíneo:</Text>
-                      <View style={styles.row}>
-                        {['O+', 'O-', 'A+', 'B+'].map((gs) => (
-                          <TouchableOpacity key={gs} style={[styles.chip, grupoSanguineo === gs && styles.chipActive]} onPress={() => setGrupoSanguineo(gs)}>
-                            <Text style={[styles.chipText, grupoSanguineo === gs && styles.chipTextActive]}>{gs}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
+                      {/* GRUPO SANGUÍNEO COMO TEXTINPUT LIBRE Y OPCIONAL */}
+                      <Text style={styles.label}>Grupo Sanguíneo (Opcional):</Text>
+                      <TextInput 
+                        style={styles.input} 
+                        placeholder="Ej: O+, A-, AB+ (Opcional si lo conoces)" 
+                        placeholderTextColor="#888" 
+                        autoCapitalize="characters"
+                        value={grupoSanguineo} 
+                        onChangeText={setGrupoSanguineo} 
+                      />
                       
                       <Text style={styles.label}>Distancia:</Text>
                       <View style={styles.row}>
@@ -587,13 +655,16 @@ export default function App() {
                         ))}
                       </View>
 
-                      <TextInput 
-                        style={styles.input} 
-                        placeholder="URL del Certificado Médico (Opcional)" 
-                        placeholderTextColor="#888" 
-                        value={certificadoUrl} 
-                        onChangeText={setCertificadoUrl} 
-                      />
+                      <Text style={styles.label}>Certificado Médico (Opcional - PDF):</Text>
+                      <TouchableOpacity 
+                        style={[styles.actionBtnDark, { marginBottom: 15, backgroundColor: pdfCertificado ? '#28A745' : Colors.black }]} 
+                        onPress={seleccionarPdfCertificado}
+                      >
+                        <Ionicons name={pdfCertificado ? "checkmark-circle" : "document-attach-outline"} size={20} color={Colors.white} style={{ marginRight: 8 }} />
+                        <Text style={styles.actionBtnText}>
+                          {pdfCertificado ? `Adjuntado: ${pdfCertificado.name}` : "Adjuntar Certificado (PDF)"}
+                        </Text>
+                      </TouchableOpacity>
 
                       <TouchableOpacity style={styles.actionBtnPrimary} onPress={handleRegistro}>
                         <Text style={styles.actionBtnText}>Confirmar e Inscribirme 🚀</Text>
@@ -607,73 +678,52 @@ export default function App() {
                       <Text style={styles.sectionHeader}>Circuitos Oficiales - Abril 2027</Text>
 
                       {/* Tarjeta 5K */}
-                      <TouchableOpacity style={styles.circuitCard} onPress={() => openInstagram(INSTAGRAM_HIGHLIGHTS_URL)}>
-                        <View style={styles.circuitBody}>
-                          <View style={styles.rowBetween}>
-                            <Text style={styles.circuitTitle}>Circuito 5K Participativo</Text>
-                            <Text style={styles.circuitBadge}>Largada 08:30 HS</Text>
-                          </View>
-                          <Text style={styles.circuitDesc}>Trazado recreativo, totalmente plano y seguro sobre la avenida principal. Ideal para familias, principiantes o caminantes.</Text>
+<TouchableOpacity style={styles.circuitCard} onPress={() => openInstagram(INSTAGRAM_HIGHLIGHTS_URL)}>
+  <Image 
+    source={require('./assets/circuitos/5k.jpg')} 
+    style={styles.circuitImage} 
+    resizeMode="contain"
+  />
+  <View style={styles.circuitBody}>
+    <View style={styles.rowBetween}>
+      <Text style={styles.circuitTitle}>Circuito 5K Participativo</Text>
+      <Text style={styles.circuitBadge}>Largada 08:30 HS</Text>
+    </View>
+    <Text style={styles.circuitDesc}>Trazado recreativo, totalmente plano y seguro sobre la avenida principal. Ideal para familias, principiantes o caminantes.</Text>
+  </View>
+</TouchableOpacity>
 
-                          <View style={styles.techDataGrid}>
-                            <View style={styles.techDataItem}>
-                              <Ionicons name="trending-up" size={14} color={Colors.primary} />
-                              <Text style={styles.techDataText}>Altimetría: +15m (Plano)</Text>
-                            </View>
-                            <View style={styles.techDataItem}>
-                              <Ionicons name="water" size={14} color={Colors.primary} />
-                              <Text style={styles.techDataText}>Hidratación: KM 2.5 y Meta</Text>
-                            </View>
-                          </View>
-                          <Text style={styles.instaLinkCircuitText}>Ver fotos del recorrido en Instagram →</Text>
-                        </View>
-                      </TouchableOpacity>
+{/* Tarjeta 10K */}
+<TouchableOpacity style={styles.circuitCard} onPress={() => openInstagram(INSTAGRAM_HIGHLIGHTS_URL)}>
+  <Image 
+    source={require('./assets/circuitos/10k.jpg')} 
+    style={styles.circuitImage} 
+    resizeMode="contain"
+  />
+  <View style={styles.circuitBody}>
+    <View style={styles.rowBetween}>
+      <Text style={styles.circuitTitle}>Circuito 10K Competitivo</Text>
+      <Text style={styles.circuitBadge}>Largada 08:00 HS</Text>
+    </View>
+    <Text style={styles.circuitDesc}>Recorrido homologado con retornos señalizados y medición por chip. Asfalto rápido para mejorar marca personal.</Text>
+  </View>
+</TouchableOpacity>
 
-                      {/* Tarjeta 10K */}
-                      <TouchableOpacity style={styles.circuitCard} onPress={() => openInstagram(INSTAGRAM_HIGHLIGHTS_URL)}>
-                        <View style={styles.circuitBody}>
-                          <View style={styles.rowBetween}>
-                            <Text style={styles.circuitTitle}>Circuito 10K Competitivo</Text>
-                            <Text style={styles.circuitBadge}>Largada 08:00 HS</Text>
-                          </View>
-                          <Text style={styles.circuitDesc}>Recorrido homologado con retornos señalizados y medición por chip. Asfalto rápido para mejorar marca personal.</Text>
-
-                          <View style={styles.techDataGrid}>
-                            <View style={styles.techDataItem}>
-                              <Ionicons name="trending-up" size={14} color={Colors.primary} />
-                              <Text style={styles.techDataText}>Altimetría: +45m</Text>
-                            </View>
-                            <View style={styles.techDataItem}>
-                              <Ionicons name="water" size={14} color={Colors.primary} />
-                              <Text style={styles.techDataText}>Hidratación: KM 2.5, 5, 7.5 y Meta</Text>
-                            </View>
-                          </View>
-                          <Text style={styles.instaLinkCircuitText}>Ver fotos del recorrido en Instagram →</Text>
-                        </View>
-                      </TouchableOpacity>
-
-                      {/* Tarjeta 21K */}
-                      <TouchableOpacity style={styles.circuitCard} onPress={() => openInstagram(INSTAGRAM_HIGHLIGHTS_URL)}>
-                        <View style={styles.circuitBody}>
-                          <View style={styles.rowBetween}>
-                            <Text style={styles.circuitTitle}>Circuito 21K Media Maratón</Text>
-                            <Text style={styles.circuitBadge}>Largada 07:30 HS</Text>
-                          </View>
-                          <Text style={styles.circuitDesc}>Desafío principal del evento. Recorrido panorámico con paso por el centro histórico, parque central y zonas de animación.</Text>
-
-                          <View style={styles.techDataGrid}>
-                            <View style={styles.techDataItem}>
-                              <Ionicons name="trending-up" size={14} color={Colors.primary} />
-                              <Text style={styles.techDataText}>Altimetría: +110m (Moderado)</Text>
-                            </View>
-                            <View style={styles.techDataItem}>
-                              <Ionicons name="water" size={14} color={Colors.primary} />
-                              <Text style={styles.techDataText}>Puestos cada 2.5 KM + Isotónicas</Text>
-                            </View>
-                          </View>
-                          <Text style={styles.instaLinkCircuitText}>Ver fotos del recorrido en Instagram →</Text>
-                        </View>
-                      </TouchableOpacity>
+{/* Tarjeta 21K */}
+<TouchableOpacity style={styles.circuitCard} onPress={() => openInstagram(INSTAGRAM_HIGHLIGHTS_URL)}>
+  <Image 
+    source={require('./assets/circuitos/21k.jpg')} 
+    style={styles.circuitImage} 
+    resizeMode="contain"
+  />
+  <View style={styles.circuitBody}>
+    <View style={styles.rowBetween}>
+      <Text style={styles.circuitTitle}>Circuito 21K Media Maratón</Text>
+      <Text style={styles.circuitBadge}>Largada 07:30 HS</Text>
+    </View>
+    <Text style={styles.circuitDesc}>Desafío principal del evento. Recorrido panorámico con paso por el centro histórico, parque central y zonas de animación.</Text>
+  </View>
+</TouchableOpacity>
 
                       <TouchableOpacity style={styles.btnInstaStoryLink} onPress={() => openInstagram(INSTAGRAM_HIGHLIGHTS_URL)}>
                         <Ionicons name="logo-instagram" size={20} color={Colors.white} style={{ marginRight: 8 }} />
@@ -805,6 +855,8 @@ export default function App() {
           )}
         </View>
 
+        
+
         {/* Menu Inferior */}
         <View style={styles.bottomNav}>
           {!isAdminMode ? (
@@ -839,11 +891,13 @@ export default function App() {
             </>
           )}
         </View>
+        
 
       </SafeAreaView>
     </SafeAreaProvider>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.black },
@@ -1018,6 +1072,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginTop: 10
   },
+  image: { width: '100%', height: 320, backgroundColor: '#eee' },
   btnContactarText: { color: Colors.white, fontWeight: 'bold', fontSize: 12 },
   fechaActualizacionBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EDF2F7', padding: 10, borderRadius: 8, marginBottom: 15 },
   fechaActualizacionText: { fontSize: 12, fontWeight: 'bold', color: Colors.black },
@@ -1026,5 +1081,10 @@ const styles = StyleSheet.create({
   changelogVersion: { fontWeight: 'bold', fontSize: 12, color: Colors.primary, marginBottom: 2 },
   changelogText: { fontSize: 11, color: Colors.gray, lineHeight: 16 },
   btnVersionEntendido: { backgroundColor: Colors.black, padding: 14, borderRadius: 10, alignItems: 'center', marginTop: 10 },
-  btnVersionEntendidoText: { color: Colors.white, fontWeight: 'bold', fontSize: 13 }
+  btnVersionEntendidoText: { color: Colors.white, fontWeight: 'bold', fontSize: 13 },
+  msgBox: { padding: 12, borderRadius: 10, marginVertical: 4, maxWidth: '80%' },
+  msgUser: { backgroundColor: Colors.primary, alignSelf: 'flex-end' },
+  msgBot: { backgroundColor: '#333', alignSelf: 'flex-start' },
+  chatInput: { flex: 1, backgroundColor: '#FFF', color: '#000', borderRadius: 8, paddingHorizontal: 12 },
+  btnSend: { backgroundColor: Colors.primary, padding: 12, borderRadius: 8, marginLeft: 6 }
 });

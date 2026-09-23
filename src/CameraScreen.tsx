@@ -3,6 +3,7 @@ import { StyleSheet, Text, View, TouchableOpacity, Alert, ImageBackground, Activ
 import { Camera, CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../colors';
+import { loadTensorflowModel, useTensorflowModel } from 'react-native-fast-tflite';
 
 const API_URL = 'https://backend-mijovi-production.up.railway.app';
 
@@ -109,6 +110,35 @@ export default function CameraScreen() {
           </View>
         </ImageBackground>
       )}
+    </View>
+  );
+}
+
+export default function ValidadorCertificadoScreen() {
+  const [analizando, setAnalizando] = useState(false);
+
+  const procesarCertificadoLocal = async (imagePath: string) => {
+    setAnalizando(true);
+    try {
+      // Simulación de análisis Edge AI On-Device con Gemma 4 / Vision
+      Alert.alert('IA Edge On-Device', 'Analizando certificado en el chip del dispositivo...');
+    } catch (e) {
+      Alert.alert('Error', 'No se pudo analizar la imagen.');
+    } finally {
+      setAnalizando(false);
+    }
+  };
+
+  return (
+    <View style={{ padding: 15, alignItems: 'center' }}>
+      <TouchableOpacity 
+        style={{ backgroundColor: Colors.primary, padding: 12, borderRadius: 8 }}
+        onPress={() => procesarCertificadoLocal('path_to_img')}
+      >
+        <Text style={{ color: Colors.white, fontWeight: 'bold' }}>
+          {analizando ? 'Procesando...' : 'Validar Certificado On-Device'}
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }
