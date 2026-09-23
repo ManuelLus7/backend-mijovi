@@ -137,6 +137,7 @@ async def registrar_corredor(
             detail="El DNI ya se encuentra registrado en la maratón."
         )
     
+<<<<<<< Updated upstream
     # Validar si el correo ya existe
     if db.query(models.Usuario).filter(models.Usuario.email == email).first():
         raise HTTPException(
@@ -152,6 +153,35 @@ async def registrar_corredor(
             pdf_path = os.path.join(UPLOAD_DIR, file_name)
             with open(pdf_path, "wb") as buffer:
                 buffer.write(await certificado_pdf.read())
+=======
+    pdf_path = None
+    if certificado_pdf and certificado_pdf.filename:
+        file_ext = certificado_pdf.filename.split(".")[-1]
+        file_name = f"certificado_{dni}.{file_ext}"
+        pdf_path = os.path.join(UPLOAD_DIR, file_name)
+        with open(pdf_path, "wb") as buffer:
+            buffer.write(await certificado_pdf.read())
+
+    qr_generado = f"MIJOVI-{dni}-{distancia}"
+    nuevo_usuario = models.Usuario(
+        nombre_completo=nombre_completo,
+        dni=dni,
+        email=email,
+        genero=genero,
+        fecha_nacimiento=fecha_nacimiento,
+        whatsapp=whatsapp,
+        telefono_emergencia=telefono_emergencia,
+        grupo_sanguineo=grupo_sanguineo or "No especificado",
+        certificado_medico_url=pdf_path,
+        distancia=distancia,
+        talle_remera=talle_remera,
+        qr_code=qr_generado,
+        acreditado=False
+    )
+    db.add(nuevo_usuario)
+    db.commit()
+    db.refresh(nuevo_usuario)
+>>>>>>> Stashed changes
 
         qr_generado = f"MIJOVI-{dni}-{distancia}"
         nuevo_usuario = models.Usuario(
