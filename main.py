@@ -5,6 +5,7 @@ from io import StringIO
 from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks, UploadFile, File, Form
 from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, EmailStr
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from dotenv import load_dotenv
@@ -112,7 +113,7 @@ async def enviar_correo_confirmacion(email_destino: str, nombre: str, dni: str, 
 
 # --- ENDPOINTS ---
 
-# 1. Registro de Corredor
+# 1. Registro de Corredor (Corregido y Optimizado)
 @app.post("/api/registro", status_code=status.HTTP_201_CREATED)
 async def registrar_corredor(
     background_tasks: BackgroundTasks,
@@ -123,55 +124,82 @@ async def registrar_corredor(
     fecha_nacimiento: str = Form(...),
     whatsapp: str = Form(...),
     telefono_emergencia: str = Form(...),
-    grupo_sanguineo: str = Form(...),
     distancia: str = Form(...),
     talle_remera: str = Form(...),
+    grupo_sanguineo: Optional[str] = Form(None),
     certificado_pdf: UploadFile = File(None),
     db: Session = Depends(get_db)
 ):
+    # Validar si el DNI ya existe
     if db.query(models.Usuario).filter(models.Usuario.dni == dni).first():
-        raise HTTPException(status_code=400, detail="El DNI ya se encuentra registrado.")
-    if db.query(models.Usuario).filter(models.Usuario.email == email).first():
-        raise HTTPException(status_code=400, detail="El correo electrónico ya se encuentra registrado.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="El DNI ya se encuentra registrado en la maratón."
+        )
     
-    pdf_path = None
-    if certificado_pdf:
-        file_ext = certificado_pdf.filename.split(".")[-1]
-        file_name = f"certificado_{dni}.{file_ext}"
-        pdf_path = os.path.join(UPLOAD_DIR, file_name)
-        with open(pdf_path, "wb") as buffer:
-            buffer.write(await certificado_pdf.read())
+    # Validar si el correo ya existe
+    if db.query(models.Usuario).filter(models.Usuario.email == email).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="El correo electrónico ya está registrado con otro corredor."
+        )
 
-    qr_generado = f"MIJOVI-{dni}-{distancia}"
-    nuevo_usuario = models.Usuario(
-        nombre_completo=nombre_completo,
-        dni=dni,
-        email=email,
-        genero=genero,
-        fecha_nacimiento=fecha_nacimiento,
-        whatsapp=whatsapp,
-        telefono_emergencia=telefono_emergencia,
-        grupo_sanguineo=grupo_sanguineo,
-        certificado_medico_url=pdf_path,
-        distancia=distancia,
-        talle_remera=talle_remera,
-        qr_code=qr_generado,
-        acreditado=False
-    )
-    db.add(nuevo_usuario)
-    db.commit()
-    db.refresh(nuevo_usuario)
+    try:
+        pdf_path = None
+        if certificado_pdf and certificado_pdf.filename:
+            file_ext = certificado_pdf.filename.split(".")[-1]
+            file_name = f"certificado_{dni}.{file_ext}"
+            pdf_path = os.path.join(UPLOAD_DIR, file_name)
+            with open(pdf_path, "wb") as buffer:
+                buffer.write(await certificado_pdf.read())
 
-    background_tasks.add_task(
-        enviar_correo_confirmacion,
-        email_destino=email,
-        nombre=nombre_completo,
-        dni=dni,
-        distancia=distancia,
-        qr_code=qr_generado,
-        talle=talle_remera
-    )
-    return {"mensaje": "Inscripción exitosa.", "qr_code": qr_generado, "id": nuevo_usuario.id}
+        qr_generado = f"MIJOVI-{dni}-{distancia}"
+        nuevo_usuario = models.Usuario(
+            nombre_completo=nombre_completo,
+            dni=dni,
+            email=email,
+            genero=genero,
+            fecha_nacimiento=fecha_nacimiento,
+            whatsapp=whatsapp,
+            telefono_emergencia=telefono_emergencia,
+            grupo_sanguineo=grupo_sanguineo or "No especificado",
+            certificado_medico_url=pdf_path,
+            distancia=distancia,
+            talle_remera=talle_remera,
+            qr_code=qr_generado,
+            acreditado=False
+        )
+        db.add(nuevo_usuario)
+        db.commit()
+        db.refresh(nuevo_usuario)
+
+        background_tasks.add_task(
+            enviar_correo_confirmacion,
+            email_destino=email,
+            nombre=nombre_completo,
+            dni=dni,
+            distancia=distancia,
+            qr_code=qr_generado,
+            talle=talle_remera
+        )
+        return {
+            "mensaje": "Inscripción exitosa.", 
+            "qr_code": qr_generado, 
+            "id": nuevo_usuario.id
+        }
+
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El DNI o correo electrónico ya se encuentra registrado."
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error en el servidor al registrar: {str(e)}"
+        )
 
 # 2. Búsqueda de Inscripción por DNI
 @app.get("/api/corredor/dni/{dni}")
@@ -221,7 +249,16 @@ def acreditar_corredor(payload: ValidarQRRequest, db: Session = Depends(get_db))
     corredor.acreditado = True
     corredor.fecha_acreditacion = datetime.datetime.now()
     db.commit()
-    return {"status": "exito", "mensaje": "✅ Kit Entregado", "corredor": {"nombre": corredor.nombre_completo, "dni": corredor.dni, "distancia": corredor.distancia, "talle": corredor.talle_remera}}
+    return {
+        "status": "exito", 
+        "mensaje": "✅ Kit Entregado", 
+        "corredor": {
+            "nombre": corredor.nombre_completo, 
+            "dni": corredor.dni, 
+            "distancia": corredor.distancia, 
+            "talle": corredor.talle_remera
+        }
+    }
 
 # 6. Acreditación Manual por DNI (Staff)
 @app.post("/api/admin/acreditar-manual/{dni}")
